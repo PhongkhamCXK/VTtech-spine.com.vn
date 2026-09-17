@@ -32,6 +32,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Chart.js for real, data-driven charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- SheetJS for Excel (.xlsx) export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         .tab-content { display: none; }
@@ -523,17 +525,37 @@
                             </div>
 
                             <div class="pt-2">
-                                <h4 class="text-sm font-bold text-slate-900 mb-3">Xu hướng mức đau (NRS) theo thời gian:</h4>
+                                <h4 class="text-sm font-bold text-slate-900 mb-3">Xu hướng mức đau (VAS/NRS) theo thời gian:</h4>
                                 <div class="relative h-52 bg-slate-50 rounded-xl border border-slate-100 p-3">
                                     <canvas id="portalPainChart"></canvas>
                                 </div>
                             </div>
 
                             <div class="pt-2">
-                                <h4 class="text-sm font-bold text-slate-900 mb-3">Lộ trình các buổi trị liệu đã thực hiện:</h4>
-                                <div id="portal-treatment-sessions-list" class="space-y-2">
-                                    <!-- Populated by JS -->
+                                <h4 class="text-sm font-bold text-slate-900 mb-3">Bảng theo dõi chỉ số sức khoẻ & tiến triển (giống hồ sơ bác sĩ đang quản lý):</h4>
+                                <div class="bg-white rounded-xl border border-slate-100 overflow-hidden">
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr class="bg-slate-50 border-b border-slate-100 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                                                    <th class="py-2.5 px-3">Ngày</th>
+                                                    <th class="py-2.5 px-3">VAS/NRS</th>
+                                                    <th class="py-2.5 px-3">Biên Độ Vận Động</th>
+                                                    <th class="py-2.5 px-3">BMI / Mỡ Máu</th>
+                                                    <th class="py-2.5 px-3">Huyết Áp</th>
+                                                    <th class="py-2.5 px-3">Phác Đồ Áp Dụng</th>
+                                                    <th class="py-2.5 px-3">Đánh Giá Bác Sĩ</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="portal-metrics-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+                                        </table>
+                                    </div>
                                 </div>
+                            </div>
+
+                            <div class="pt-2">
+                                <h4 class="text-sm font-bold text-slate-900 mb-3">Liệu trình, mốc tái khám & lịch từng buổi:</h4>
+                                <div id="portal-treatment-content" class="space-y-3"></div>
                             </div>
                         </div>
 
@@ -574,6 +596,71 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div id="tab-technicians" class="tab-content space-y-6">
+                    <!-- Admin: manage technician accounts -->
+                    <div id="tech-admin-section" class="hidden space-y-6">
+                        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900">Quản Lý Tài Khoản Kỹ Thuật Viên</h3>
+                                <p class="text-xs text-slate-500 mt-0.5">3 nhóm: Vận động, Vật lý trị liệu máy, Vật lý trị liệu tay — mỗi người 1 tài khoản đăng nhập riêng</p>
+                            </div>
+                            <button onclick="openTechnicianModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center justify-center space-x-2 shadow-md shadow-blue-600/25 transition">
+                                <i class="fa-solid fa-user-plus text-xs"></i><span>Thêm Kỹ Thuật Viên</span>
+                            </button>
+                        </div>
+                        <div id="technicians-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                    </div>
+
+                    <!-- Technician: my own status -->
+                    <div id="tech-self-section" class="hidden">
+                        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-base font-bold text-slate-900"><i class="fa-solid fa-id-badge text-teal-600 mr-2"></i>Trạng Thái Làm Việc Của Tôi</h3>
+                                <span id="tech-self-status-badge" class="text-xs font-bold px-3 py-1.5 rounded-full">-</span>
+                            </div>
+                            <button onclick="toggleTechStatus()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition mb-4">
+                                Chuyển Trạng Thái Đang Làm / Nghỉ (Off)
+                            </button>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                                <div class="sm:col-span-2">
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Địa chỉ Check-in / Check-out</label>
+                                    <input type="text" id="tech-checkin-address" placeholder="VD: 12 Nguyễn Trãi, Q1, TP.HCM" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button onclick="techCheckIn()" class="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition">Check-in</button>
+                                    <button onclick="techCheckOut()" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition">Check-out</button>
+                                </div>
+                            </div>
+                            <p id="tech-self-checkin-info" class="text-xs text-slate-500 mt-3"></p>
+                        </div>
+                    </div>
+
+                    <!-- Lead technician / Admin: assign daily tour -->
+                    <div id="tech-lead-section" class="hidden">
+                        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                            <h3 class="text-base font-bold text-slate-900 mb-1"><i class="fa-solid fa-route text-indigo-600 mr-2"></i>Chia Tour Cho Kỹ Thuật Viên</h3>
+                            <p class="text-xs text-slate-500 mb-4">Chỉ lấy từ Lịch Hẹn Khám đã được Bác sĩ/CSKH đặt (không tự chọn bệnh nhân ngoài danh sách này) — Chỉ Trưởng Kỹ Thuật Viên & Quản trị viên thấy mục này</p>
+                            <form onsubmit="handleAssignTour(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <select id="tour-appointment" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                                    <option value="">-- Chọn lịch hẹn từ Lịch Hẹn Khám --</option>
+                                </select>
+                                <select id="tour-technician" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"></select>
+                                <button type="submit" class="py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition">+ Thêm Vào Tour</button>
+                            </form>
+                            <p id="tour-no-appt-warning" class="hidden text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mt-3"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Chưa có lịch hẹn nào đang chờ (chưa hoàn thành) trong mục Lịch Hẹn Khám. Vào tab đó để đặt lịch trước.</p>
+                        </div>
+                    </div>
+
+                    <!-- Everyone with tab access: today's tour list -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-base font-bold text-slate-900"><i class="fa-regular fa-calendar-check text-teal-600 mr-2"></i>Danh Sách Khách Hôm Nay (Tour)</h3>
+                            <span class="text-xs text-slate-400">Diễn tiến buổi làm được ghi lại theo y học khoa học</span>
+                        </div>
+                        <div id="tour-list" class="space-y-3"></div>
                     </div>
                 </div>
 
@@ -660,57 +747,141 @@
 
     <!-- Patient Modal (Add / Edit) -->
     <div id="patientModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-                <h3 id="patientModalTitle" class="text-lg font-bold text-slate-900">Thêm Hồ Sơ Bệnh Nhân & Tạo Tài Khoản EMR</h3>
+        <div class="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 sticky -top-6 bg-white pt-1">
+                <div>
+                    <h3 id="patientModalTitle" class="text-lg font-bold text-slate-900">Thêm Hồ Sơ Bệnh Nhân & Tạo Tài Khoản EMR</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Bệnh án đầy đủ theo mẫu phòng khám cơ xương khớp & cột sống</p>
+                </div>
                 <button onclick="closeModal('patientModal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
-            <form id="patientForm" onsubmit="handlePatientSubmit(event)" class="space-y-4">
+            <form id="patientForm" onsubmit="handlePatientSubmit(event)" class="space-y-5">
                 <input type="hidden" id="pat-edit-id" value="">
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Họ và Tên</label>
-                        <input type="text" id="pat-name" required placeholder="Nguyễn Văn A" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+
+                <!-- I. Hành chính -->
+                <div class="space-y-3">
+                    <h4 class="text-xs font-bold text-blue-700 uppercase tracking-wide bg-blue-50 px-3 py-1.5 rounded-lg inline-block">I. Hành Chính</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Họ và Tên</label>
+                            <input type="text" id="pat-name" required placeholder="Nguyễn Văn A" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Số Điện Thoại</label>
+                            <input type="tel" id="pat-phone" required placeholder="0905123456" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Tuổi</label>
+                            <input type="number" id="pat-age" required placeholder="45" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Giới tính</label>
+                            <select id="pat-gender" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <option value="Nam">Nam</option>
+                                <option value="Nữ">Nữ</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Nghề nghiệp</label>
+                            <input type="text" id="pat-occupation" placeholder="Nhân viên văn phòng" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Số Điện Thoại</label>
-                        <input type="tel" id="pat-phone" required placeholder="0905123456" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Ngày giờ đầu tiên đến khám</label>
+                        <input type="datetime-local" id="pat-firstvisit" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
                     </div>
                 </div>
-                <div class="grid grid-cols-3 gap-4">
+
+                <!-- II. Lý do khám & Bệnh sử -->
+                <div class="space-y-3">
+                    <h4 class="text-xs font-bold text-blue-700 uppercase tracking-wide bg-blue-50 px-3 py-1.5 rounded-lg inline-block">II. Lý Do Khám & Bệnh Sử</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Vùng Đau</label>
+                            <select id="pat-bodypart" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <option value="Thắt lưng">Thắt lưng</option>
+                                <option value="Cổ">Cổ</option>
+                                <option value="Khớp gối">Khớp gối</option>
+                                <option value="Lưng trên">Lưng trên</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Chẩn Đoán Chuyên Khoa</label>
+                            <input type="text" id="pat-diagnosis" required placeholder="Thoát vị đĩa đệm L4-L5" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                    </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Tuổi</label>
-                        <input type="number" id="pat-age" required placeholder="45" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Lý do đến khám</label>
+                        <input type="text" id="pat-chiefcomplaint" placeholder="Đau mỏi vùng cổ vai gáy 2 tuần nay" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Giới tính</label>
-                        <select id="pat-gender" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                            <option value="Nam">Nam</option>
-                            <option value="Nữ">Nữ</option>
-                        </select>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Bệnh sử của bệnh nhân (quá trình đau, diễn tiến)</label>
+                        <textarea id="pat-presentillness" rows="2" placeholder="Đau âm ỉ tăng dần khi ngồi lâu, lan xuống vai trái..." class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+                    </div>
+                </div>
+
+                <!-- III. Tiền căn -->
+                <div class="space-y-3">
+                    <h4 class="text-xs font-bold text-amber-700 uppercase tracking-wide bg-amber-50 px-3 py-1.5 rounded-lg inline-block">III. Tiền Căn</h4>
+                    <p class="text-[11px] font-semibold text-slate-500">Nội khoa</p>
+                    <div class="flex flex-wrap gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <label class="flex items-center space-x-2 text-xs font-medium text-slate-700"><input type="checkbox" id="pat-hypertension" class="w-4 h-4 accent-blue-600"><span>Tăng huyết áp</span></label>
+                        <label class="flex items-center space-x-2 text-xs font-medium text-slate-700"><input type="checkbox" id="pat-diabetes" class="w-4 h-4 accent-blue-600"><span>Đái tháo đường</span></label>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <input type="text" id="pat-otherdisease" placeholder="Bệnh nội khoa khác (nếu có)" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <input type="text" id="pat-diagnosedat" placeholder="Chẩn đoán tại đâu" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <input type="text" id="pat-currentmeds" placeholder="Đang điều trị thuốc gì" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <p class="text-[11px] font-semibold text-slate-500 pt-1">Ngoại khoa</p>
+                    <input type="text" id="pat-surgical" placeholder="Phẫu thuật / can thiệp gì trước đây (nếu không, ghi 'Không')" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <p class="text-[11px] font-semibold text-slate-500 pt-1">Dị ứng</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <input type="text" id="pat-allergy-drug" placeholder="Dị ứng thuốc" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <input type="text" id="pat-allergy-food" placeholder="Dị ứng thức ăn" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <input type="text" id="pat-allergy-other" placeholder="Dị ứng khác (hoa, phấn...)" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- IV. Thói quen sinh hoạt -->
+                <div class="space-y-3">
+                    <h4 class="text-xs font-bold text-orange-700 uppercase tracking-wide bg-orange-50 px-3 py-1.5 rounded-lg inline-block">IV. Thói Quen Sinh Hoạt</h4>
+                    <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <label class="flex items-center space-x-2 text-xs font-medium text-slate-700"><input type="checkbox" id="pat-exerciselimited" class="w-4 h-4 accent-orange-600"><span>Hạn chế vận động</span></label>
+                        <label class="flex items-center space-x-2 text-xs font-medium text-slate-700"><input type="checkbox" id="pat-greasy" class="w-4 h-4 accent-orange-600"><span>Ăn nhiều dầu mỡ</span></label>
+                        <label class="flex items-center space-x-2 text-xs font-medium text-slate-700"><input type="checkbox" id="pat-vegetarian" class="w-4 h-4 accent-orange-600"><span>Ăn chay</span></label>
+                        <label class="flex items-center space-x-2 text-xs font-medium text-slate-700"><input type="checkbox" id="pat-highsalt" class="w-4 h-4 accent-orange-600"><span>Ăn nhiều muối</span></label>
+                        <label class="flex items-center space-x-2 text-xs font-medium text-slate-700"><input type="checkbox" id="pat-lowwater" class="w-4 h-4 accent-orange-600"><span>Ít uống nước</span></label>
+                        <label class="flex items-center space-x-2 text-xs font-medium text-slate-700"><input type="checkbox" id="pat-sedentary" class="w-4 h-4 accent-orange-600"><span>Ngồi nhiều &gt;6 tiếng/ngày</span></label>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input type="text" id="pat-exercisefreq" placeholder="Tần suất tập vận động (VD: dưới 30'/tuần)" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <input type="text" id="pat-alcohol" placeholder="Rượu bia (bao nhiêu / năm)" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- V. Gia đình & Chẩn đoán sơ bộ -->
+                <div class="space-y-3">
+                    <h4 class="text-xs font-bold text-emerald-700 uppercase tracking-wide bg-emerald-50 px-3 py-1.5 rounded-lg inline-block">V. Gia Đình & Chẩn Đoán Sơ Bộ</h4>
+                    <input type="text" id="pat-familyhistory" placeholder="Gia đình có mắc bệnh lý tương tự không" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <input type="text" id="pat-preliminarydx" placeholder="Chẩn đoán sơ bộ trước khi có cận lâm sàng" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+
+                <!-- VI. Tài khoản & Ghi chú -->
+                <div class="space-y-3">
+                    <h4 class="text-xs font-bold text-indigo-700 uppercase tracking-wide bg-indigo-50 px-3 py-1.5 rounded-lg inline-block">VI. Tài Khoản Cổng Bệnh Nhân</h4>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Mật khẩu đăng nhập cổng bệnh nhân</label>
+                        <input type="text" id="pat-password" value="123456" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Vùng Đau</label>
-                        <select id="pat-bodypart" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                            <option value="Thắt lưng">Thắt lưng</option>
-                            <option value="Cổ">Cổ</option>
-                            <option value="Khớp gối">Khớp gối</option>
-                            <option value="Lưng trên">Lưng trên</option>
-                        </select>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Ghi chú điều trị chung</label>
+                        <textarea id="pat-history" rows="2" placeholder="Đau âm ỉ..." class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
                     </div>
                 </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">Chẩn Đoán / Bệnh Lý</label>
-                    <input type="text" id="pat-diagnosis" required placeholder="Thoát vị đĩa đệm L4-L5" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">Mật khẩu đăng nhập cổng bệnh nhân</label>
-                    <input type="text" id="pat-password" value="123456" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">Ghi chú điều trị</label>
-                    <textarea id="pat-history" rows="2" placeholder="Đau âm ỉ..." class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
-                </div>
+
                 <div class="flex justify-end space-x-3 pt-3 border-t border-slate-100">
                     <button type="button" onclick="closeModal('patientModal')" class="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Hủy</button>
                     <button type="submit" id="patientSubmitBtn" class="px-5 py-2 rounded-xl text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-md">Lưu EMR & Tạo Tài Khoản</button>
@@ -720,6 +891,75 @@
     </div>
 
     <!-- Staff Account Modal (Add / Edit) -->
+    <!-- Technician Account Modal (Add / Edit) -->
+    <div id="technicianModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                <h3 id="technicianModalTitle" class="text-lg font-bold text-slate-900">Thêm Kỹ Thuật Viên</h3>
+                <button onclick="closeModal('technicianModal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form id="technicianForm" onsubmit="handleTechnicianSubmit(event)" class="space-y-4">
+                <input type="hidden" id="tech-edit-id" value="">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Họ và Tên</label>
+                    <input type="text" id="tech-name" required placeholder="Lê Văn Sơn" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Nhóm Kỹ Thuật Viên</label>
+                    <select id="tech-type" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        <option value="Vận động">Kỹ thuật viên vận động</option>
+                        <option value="Máy">Kỹ thuật viên vật lý trị liệu máy</option>
+                        <option value="Tay">Kỹ thuật viên vật lý trị liệu tay</option>
+                    </select>
+                </div>
+                <label class="flex items-center space-x-2 bg-teal-50 p-3 rounded-xl border border-teal-100">
+                    <input type="checkbox" id="tech-islead" class="w-4 h-4 accent-teal-600">
+                    <span class="text-xs font-semibold text-teal-800">Là Trưởng Kỹ Thuật Viên (được chia Tour cho các bạn khác)</span>
+                </label>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Tên Đăng Nhập</label>
+                        <input type="text" id="tech-username" required placeholder="ktv4" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Mật Khẩu</label>
+                        <input type="text" id="tech-password" required placeholder="123456" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('technicianModal')" class="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Hủy</button>
+                    <button type="submit" id="technicianSubmitBtn" class="px-5 py-2 rounded-xl text-sm font-semibold bg-teal-600 text-white hover:bg-teal-700 shadow-md">Lưu Tài Khoản</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tour Progress Note Modal -->
+    <div id="tourProgressModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Ghi Diễn Tiến Buổi Làm & Hoàn Thành</h3>
+                    <p id="tour-progress-techtype-label" class="text-xs font-semibold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg inline-block mt-1"></p>
+                </div>
+                <button onclick="closeModal('tourProgressModal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="handleTourProgressSubmit(event)" class="space-y-4">
+                <input type="hidden" id="tour-progress-id" value="">
+                <input type="hidden" id="tour-progress-techtype" value="">
+                <div id="tour-progress-fields" class="space-y-3"></div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Ghi chú thêm (nếu có)</label>
+                    <textarea id="tour-progress-general" rows="2" placeholder="Ghi chú bổ sung khác (nếu cần)..." class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('tourProgressModal')" class="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Hủy</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-sm font-semibold bg-teal-600 text-white hover:bg-teal-700 shadow-md">Lưu & Đánh Dấu Hoàn Thành</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="staffModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
             <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
@@ -760,6 +1000,30 @@
     </div>
 
     <!-- Treatment Modal (Add / Edit) -->
+    <!-- Session-by-session Schedule Modal -->
+    <div id="scheduleModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between mb-3 pb-3 border-b border-slate-100 flex-shrink-0">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Sắp Xếp Lịch Trình Điều Trị Từng Buổi</h3>
+                    <p id="scheduleModalSubtitle" class="text-xs text-slate-500 mt-0.5">-</p>
+                </div>
+                <button onclick="closeModal('scheduleModal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="handleScheduleSubmit(event)" class="flex flex-col flex-1 min-h-0">
+                <input type="hidden" id="schedule-treatment-id" value="">
+                <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-800 mb-3 flex-shrink-0">
+                    <i class="fa-solid fa-circle-info mr-1"></i>Nhập ngày dự kiến và nội dung cho từng buổi. Các buổi tô vàng 🔔 là mốc tái khám kiểm tra (buổi <span id="schedule-checkpoints-label" class="font-bold"></span>).
+                </div>
+                <div id="schedule-rows-container" class="space-y-2 overflow-y-auto flex-1 pr-1"></div>
+                <div class="flex justify-end space-x-3 pt-3 mt-3 border-t border-slate-100 flex-shrink-0">
+                    <button type="button" onclick="closeModal('scheduleModal')" class="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Hủy</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-md">Lưu Lịch Trình</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="treatmentModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
             <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
@@ -828,16 +1092,23 @@
 
     <!-- Invoice Modal (Add / Edit) -->
     <div id="invoiceModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
                 <h3 id="invoiceModalTitle" class="text-lg font-bold text-slate-900">Tạo Hóa Đơn Mới</h3>
                 <button onclick="closeModal('invoiceModal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
             <form id="invoiceForm" onsubmit="handleInvoiceSubmit(event)" class="space-y-4">
                 <input type="hidden" id="inv-edit-id" value="">
+                <input type="hidden" id="inv-patient-id" value="">
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">Bệnh Nhân</label>
-                    <select id="inv-patient-id" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"></select>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Mã Bệnh Nhân</label>
+                    <input type="text" id="inv-patient-code" list="inv-patient-datalist" oninput="lookupPatientForInvoice()" onchange="lookupPatientForInvoice()" required placeholder="Gõ mã BN, VD: BN001" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <datalist id="inv-patient-datalist"></datalist>
+                </div>
+                <div id="inv-patient-info" class="hidden bg-blue-50 p-3 rounded-xl border border-blue-100 text-xs space-y-1">
+                    <p>Bệnh nhân: <span id="inv-info-name" class="font-bold text-slate-900"></span></p>
+                    <p>Gói đang dùng: <span id="inv-info-package" class="font-semibold text-blue-700"></span></p>
+                    <p>Ngày kết thúc dự kiến: <span id="inv-info-enddate" class="font-semibold text-indigo-700"></span></p>
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1">Nội Dung Dịch Vụ</label>
@@ -852,6 +1123,34 @@
                         <label class="block text-xs font-semibold text-slate-600 mb-1">Ngày Lập</label>
                         <input type="date" id="inv-date" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
                     </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Hình Thức Thanh Toán</label>
+                    <select id="inv-method" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="">-- Chưa chọn --</option>
+                        <option value="Tiền mặt">Tiền mặt</option>
+                        <option value="Chuyển khoản ngân hàng">Chuyển khoản</option>
+                        <option value="Thẻ tín dụng">Thẻ tín dụng</option>
+                        <option value="Đặc biệt">Đặc biệt (khác)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Tình Trạng Công Nợ</label>
+                    <select id="inv-debttype" onchange="toggleDebtDetail()" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="Đã thanh toán đủ">Đã thanh toán đủ</option>
+                        <option value="Toàn bộ">Còn nợ toàn bộ</option>
+                        <option value="Một phần">Còn nợ một phần</option>
+                        <option value="Góp">Trả góp</option>
+                    </select>
+                </div>
+                <div id="inv-debt-detail" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1" id="inv-debt-detail-label">Số tiền còn nợ (VNĐ)</label>
+                    <input type="text" id="inv-debt-remaining" placeholder="VD: 500000 hoặc 'Góp 3 kỳ, mỗi kỳ 500.000đ'" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2">
+                    <p class="text-xs font-semibold text-slate-600">Xác nhận hóa đơn (cả 2 đầu)</p>
+                    <label class="flex items-center space-x-2 text-xs font-medium text-slate-700"><input type="checkbox" id="inv-confirm-patient" class="w-4 h-4 accent-blue-600"><span>Bệnh nhân đã xác nhận</span></label>
+                    <label class="flex items-center space-x-2 text-xs font-medium text-slate-700"><input type="checkbox" id="inv-confirm-clinic" class="w-4 h-4 accent-blue-600"><span>Phòng khám đã xác nhận</span></label>
                 </div>
                 <div class="flex justify-end space-x-3 pt-3 border-t border-slate-100">
                     <button type="button" onclick="closeModal('invoiceModal')" class="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Hủy</button>
@@ -969,30 +1268,62 @@
                     <!-- Add/Edit Metric Inline Form (hidden by default) -->
                     <div id="addMetricFormContainer" class="hidden bg-blue-50/50 p-4 rounded-2xl border border-blue-100 space-y-3">
                         <h5 id="metricFormTitle" class="text-xs font-bold text-blue-900">Cập nhật chỉ số sức khoẻ & tiến triển mới</h5>
-                        <form onsubmit="handleMetricSubmit(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                        <form onsubmit="handleMetricSubmit(event)" class="space-y-3">
                             <input type="hidden" id="metric-edit-id" value="">
-                            <div>
-                                <label class="block text-[11px] font-semibold text-slate-600 mb-1">Ngày đo</label>
-                                <input type="date" id="metric-date" required class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Ngày đo</label>
+                                    <input type="date" id="metric-date" required class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Thang điểm đau VAS/NRS (0-10)</label>
+                                    <input type="number" min="0" max="10" id="metric-pain" required placeholder="VD: 4" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Huyết áp / Nhịp tim</label>
+                                    <input type="text" id="metric-bp" required placeholder="VD: 120/80 mmHg" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Biên độ vận động (chung)</label>
+                                    <input type="text" id="metric-rom" required placeholder="VD: Bình thường 90%" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">BMI</label>
+                                    <input type="text" id="metric-bmi" placeholder="VD: 23.4" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">Mỡ máu</label>
+                                    <input type="text" id="metric-lipid" placeholder="VD: Bình thường" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">ROM Cổ</label>
+                                    <input type="text" id="metric-rom-neck" placeholder="VD: 90%" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">ROM Vai</label>
+                                    <input type="text" id="metric-rom-shoulder" placeholder="VD: 85%" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">ROM Lưng</label>
+                                    <input type="text" id="metric-rom-back" placeholder="VD: 80%" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">ROM Gối</label>
+                                    <input type="text" id="metric-rom-knee" placeholder="VD: 90%" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                </div>
                             </div>
                             <div>
-                                <label class="block text-[11px] font-semibold text-slate-600 mb-1">Mức đau (NRS 0-10)</label>
-                                <input type="number" min="0" max="10" id="metric-pain" required placeholder="VD: 4" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <label class="block text-[11px] font-semibold text-slate-600 mb-1">Phác đồ điều trị áp dụng buổi này</label>
+                                <div id="metric-protocol-checkboxes" class="flex flex-wrap gap-2"></div>
                             </div>
                             <div>
-                                <label class="block text-[11px] font-semibold text-slate-600 mb-1">Biên độ vận động</label>
-                                <input type="text" id="metric-rom" required placeholder="VD: Bình thường 90%" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-semibold text-slate-600 mb-1">Huyết áp / Nhịp tim</label>
-                                <input type="text" id="metric-bp" required placeholder="VD: 120/80 mmHg" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                            </div>
-                            <div class="sm:col-span-3">
                                 <label class="block text-[11px] font-semibold text-slate-600 mb-1">Đánh giá tiến triển của Bác sĩ</label>
                                 <input type="text" id="metric-notes" required placeholder="VD: Bệnh nhân hồi phục tốt, đã giảm hẳn tê bì..." class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
                             </div>
-                            <div class="flex items-end space-x-2">
-                                <button type="submit" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm">Lưu</button>
+                            <div class="flex items-center space-x-2">
+                                <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm">Lưu Chỉ Số</button>
                                 <button type="button" onclick="closeAddMetricForm()" class="py-2 px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition">Hủy</button>
                             </div>
                         </form>
@@ -1005,9 +1336,11 @@
                                 <thead>
                                     <tr class="bg-slate-50 border-b border-slate-100 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                                         <th class="py-3 px-4">Ngày Khám</th>
-                                        <th class="py-3 px-4">Mức Đau (NRS)</th>
-                                        <th class="py-3 px-4">Biên Độ Vận Động</th>
+                                        <th class="py-3 px-4">VAS/NRS</th>
+                                        <th class="py-3 px-4">Biên Độ Vận Động (ROM)</th>
+                                        <th class="py-3 px-4">BMI / Mỡ Máu</th>
                                         <th class="py-3 px-4">Huyết Áp</th>
+                                        <th class="py-3 px-4">Phác Đồ Áp Dụng</th>
                                         <th class="py-3 px-4">Đánh Giá Tiến Triển</th>
                                         <th class="py-3 px-4 text-right no-print">Thao Tác</th>
                                     </tr>
@@ -1018,6 +1351,12 @@
                             </table>
                         </div>
                     </div>
+                </div>
+
+                <!-- Treatment package & warranty schedule -->
+                <div id="emr-treatment-section" class="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wide"><i class="fa-solid fa-calendar-check text-indigo-600 mr-2"></i>Liệu Trình, Mốc Tái Khám & Lịch Bảo Hành</h4>
+                    <div id="emr-treatment-content" class="space-y-3"></div>
                 </div>
 
                 <!-- Clinical Notes History -->
@@ -1060,6 +1399,27 @@
             return prefix + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 900 + 100);
         }
 
+        function defaultIntake() {
+            return {
+                occupation: '', firstVisitDateTime: '', chiefComplaint: '', presentIllness: '',
+                pastMedicalHistory: { hypertension: false, diabetes: false, otherDisease: '', diagnosedAt: '', currentMedications: '' },
+                surgicalHistory: '',
+                allergies: { drug: '', food: '', other: '' },
+                habits: { exerciseLimited: false, exerciseFreq: '', greasyFood: false, vegetarian: false, highSalt: false, alcohol: '', lowWater: false, sedentaryJob: false },
+                familyHistory: '', preliminaryDiagnosis: ''
+            };
+        }
+
+        function defaultMetricExtras() {
+            return { bmi: '', lipid: '', romNeck: '', romShoulder: '', romBack: '', romKnee: '', treatmentProtocol: [] };
+        }
+
+        const TREATMENT_PROTOCOL_OPTIONS = [
+            'Kiểm soát thể lực', 'Ổn định yếu tố nội tại', 'Ổn định bệnh lý nền',
+            'Giãn cơ do viêm mạn', 'Di động giải co thắt', 'Shockwave', 'EMS', 'TENS', 'DIY',
+            'Điều chỉnh cột sống không xâm lấn', 'Tác động cột sống không xâm lấn'
+        ];
+
         function seedData() {
             return {
                 patients: [
@@ -1068,39 +1428,50 @@
                         password: '123456', bodyPart: 'Cổ', diagnosis: 'Thoái hóa cột sống cổ C5-C6, đau mỏi vai gáy',
                         history: 'Đau âm ỉ vùng cổ lan xuống bả vai trái khi làm việc văn phòng lâu. Đã kê phác đồ kéo giãn kết hợp vật lý trị liệu.',
                         dietPlan: standardDietPlan,
+                        ...defaultIntake(),
+                        occupation: 'Nhân viên văn phòng',
+                        firstVisitDateTime: '2026-09-01T08:30',
+                        chiefComplaint: 'Đau mỏi vùng cổ vai gáy 2 tuần nay',
+                        presentIllness: 'Đau âm ỉ tăng dần khi ngồi làm việc lâu, lan xuống vai trái, kèm tê nhẹ tay trái.',
+                        pastMedicalHistory: { hypertension: false, diabetes: false, otherDisease: '', diagnosedAt: '', currentMedications: '' },
+                        surgicalHistory: 'Không',
+                        allergies: { drug: 'Không', food: 'Không', other: '' },
+                        habits: { exerciseLimited: true, exerciseFreq: 'Dưới 30 phút/tuần', greasyFood: false, vegetarian: false, highSalt: false, alcohol: 'Hiếm khi', lowWater: true, sedentaryJob: true },
+                        familyHistory: 'Không ghi nhận bệnh lý tương tự',
+                        preliminaryDiagnosis: 'Thoái hóa cột sống cổ / Hội chứng cổ vai cánh tay',
                         healthMetrics: [
-                            { id: uid('HM'), date: '2026-09-01', painScore: 8, rangeOfMotion: 'Hạn chế 40%', bloodPressure: '120/80 mmHg', notes: 'Đau nhiều, cứng cổ buổi sáng khi thức dậy' },
-                            { id: uid('HM'), date: '2026-09-05', painScore: 6, rangeOfMotion: 'Hạn chế 25%', bloodPressure: '118/78 mmHg', notes: 'Đã đỡ hơn sau 3 buổi kéo giãn cột sống' },
-                            { id: uid('HM'), date: '2026-09-10', painScore: 4, rangeOfMotion: 'Bình thường 80%', bloodPressure: '120/80 mmHg', notes: 'Cải thiện rõ rệt, quay cổ linh hoạt, giảm tê mỏi' }
+                            { id: uid('HM'), date: '2026-09-01', painScore: 8, rangeOfMotion: 'Hạn chế 40%', bloodPressure: '120/80 mmHg', notes: 'Đau nhiều, cứng cổ buổi sáng khi thức dậy', ...defaultMetricExtras(), bmi: '23.4', lipid: 'Bình thường', romNeck: 'Hạn chế 40%' },
+                            { id: uid('HM'), date: '2026-09-05', painScore: 6, rangeOfMotion: 'Hạn chế 25%', bloodPressure: '118/78 mmHg', notes: 'Đã đỡ hơn sau 3 buổi kéo giãn cột sống', ...defaultMetricExtras(), bmi: '23.4', romNeck: 'Hạn chế 25%', treatmentProtocol: ['Giãn cơ do viêm mạn', 'Di động giải co thắt'] },
+                            { id: uid('HM'), date: '2026-09-10', painScore: 4, rangeOfMotion: 'Bình thường 80%', bloodPressure: '120/80 mmHg', notes: 'Cải thiện rõ rệt, quay cổ linh hoạt, giảm tê mỏi', ...defaultMetricExtras(), bmi: '23.2', romNeck: 'Bình thường 80%', treatmentProtocol: ['Ổn định bệnh lý nền', 'EMS'] }
                         ]
                     },
                     {
                         id: 'BN002', name: 'Nguyễn Văn Hùng', age: 54, gender: 'Nam', phone: '0903123888',
                         password: '123456', bodyPart: 'Thắt lưng', diagnosis: 'Thoát vị đĩa đệm L4-L5',
                         history: 'Đã tiêm giảm đau ngoài màng cứng, nay điều trị vật lý trị liệu.',
-                        dietPlan: standardDietPlan,
+                        dietPlan: standardDietPlan, ...defaultIntake(),
                         healthMetrics: [
-                            { id: uid('HM'), date: '2026-09-02', painScore: 9, rangeOfMotion: 'Hạn chế 60%', bloodPressure: '130/85 mmHg', notes: 'Đau buốt lan xuống chân phải, khó đi lại' },
-                            { id: uid('HM'), date: '2026-09-08', painScore: 6, rangeOfMotion: 'Hạn chế 35%', bloodPressure: '125/80 mmHg', notes: 'Giảm đau tọa kinh, vận động nhẹ nhàng hơn' }
+                            { id: uid('HM'), date: '2026-09-02', painScore: 9, rangeOfMotion: 'Hạn chế 60%', bloodPressure: '130/85 mmHg', notes: 'Đau buốt lan xuống chân phải, khó đi lại', ...defaultMetricExtras() },
+                            { id: uid('HM'), date: '2026-09-08', painScore: 6, rangeOfMotion: 'Hạn chế 35%', bloodPressure: '125/80 mmHg', notes: 'Giảm đau tọa kinh, vận động nhẹ nhàng hơn', ...defaultMetricExtras() }
                         ]
                     },
                     {
                         id: 'BN003', name: 'Trần Thị Mai', age: 38, gender: 'Nữ', phone: '0988776655',
                         password: '123456', bodyPart: 'Khớp gối', diagnosis: 'Viêm khớp gối phải, tràn dịch nhẹ',
                         history: 'Đau khi leo cầu thang, tiếng kêu lạo xạo khớp gối khi vận động.',
-                        dietPlan: standardDietPlan,
+                        dietPlan: standardDietPlan, ...defaultIntake(),
                         healthMetrics: [
-                            { id: uid('HM'), date: '2026-09-03', painScore: 7, rangeOfMotion: 'Hạn chế 30%', bloodPressure: '115/75 mmHg', notes: 'Sưng nhẹ khớp gối phải, đau khi gập gối' },
-                            { id: uid('HM'), date: '2026-09-09', painScore: 3, rangeOfMotion: 'Bình thường 90%', bloodPressure: '118/76 mmHg', notes: 'Hết tràn dịch, vận động gấp duỗi tốt' }
+                            { id: uid('HM'), date: '2026-09-03', painScore: 7, rangeOfMotion: 'Hạn chế 30%', bloodPressure: '115/75 mmHg', notes: 'Sưng nhẹ khớp gối phải, đau khi gập gối', ...defaultMetricExtras() },
+                            { id: uid('HM'), date: '2026-09-09', painScore: 3, rangeOfMotion: 'Bình thường 90%', bloodPressure: '118/76 mmHg', notes: 'Hết tràn dịch, vận động gấp duỗi tốt', ...defaultMetricExtras() }
                         ]
                     },
                     {
                         id: 'BN004', name: 'Lê Hoàng Long', age: 29, gender: 'Nam', phone: '0912345679',
                         password: '123456', bodyPart: 'Lưng trên', diagnosis: 'Cong vẹo cột sống ngực, đau cơ cấp',
                         history: 'Chấn thương thể thao nhẹ, đau cơ vùng lưng trên.',
-                        dietPlan: standardDietPlan,
+                        dietPlan: standardDietPlan, ...defaultIntake(),
                         healthMetrics: [
-                            { id: uid('HM'), date: '2026-09-06', painScore: 7, rangeOfMotion: 'Hạn chế 30%', bloodPressure: '122/80 mmHg', notes: 'Co cứng cơ cạnh sống ngực' }
+                            { id: uid('HM'), date: '2026-09-06', painScore: 7, rangeOfMotion: 'Hạn chế 30%', bloodPressure: '122/80 mmHg', notes: 'Co cứng cơ cạnh sống ngực', ...defaultMetricExtras() }
                         ]
                     }
                 ],
@@ -1110,16 +1481,16 @@
                     { id: 'LH003', patientName: 'Trần Thị Mai', phone: '0988776655', time: '16:00 - Hôm nay', doctor: 'BS. Nguyễn Thị Mai', service: 'Viêm khớp gối', status: 'Đã đặt' }
                 ],
                 treatments: [
-                    { id: 'LT001', patientName: 'Đỗ Thị Bích Ngọc', plan: 'Kéo giãn cột sống cổ + Sóng ngắn + Châm cứu', total: 10, done: 4, followup: '2026-09-15', status: 'Đang điều trị' },
-                    { id: 'LT002', patientName: 'Nguyễn Văn Hùng', plan: 'Phục hồi chức năng thoát vị L4-L5', total: 15, done: 9, followup: '2026-09-18', status: 'Đang điều trị' },
-                    { id: 'LT003', patientName: 'Trần Thị Mai', plan: 'Điện trị liệu khớp gối + Siêu âm điều trị', total: 8, done: 8, followup: '2026-09-25', status: 'Hoàn thành' }
+                    { id: 'LT001', patientName: 'Đỗ Thị Bích Ngọc', plan: 'Kéo giãn cột sống cổ + Sóng ngắn + Châm cứu', total: 21, done: 4, followup: '2026-09-15', status: 'Đang điều trị', warrantyStartDate: '', warrantySessionsDone: 0 },
+                    { id: 'LT002', patientName: 'Nguyễn Văn Hùng', plan: 'Phục hồi chức năng thoát vị L4-L5', total: 21, done: 9, followup: '2026-09-18', status: 'Đang điều trị', warrantyStartDate: '', warrantySessionsDone: 0 },
+                    { id: 'LT003', patientName: 'Trần Thị Mai', plan: 'Điện trị liệu khớp gối + Siêu âm điều trị', total: 21, done: 21, followup: '2026-09-25', status: 'Hoàn thành', warrantyStartDate: '2026-09-11', warrantySessionsDone: 0 }
                 ],
                 invoices: [
-                    { id: 'HD001', patientId: 'BN001', patientName: 'Đỗ Thị Bích Ngọc', description: 'Vật lý trị liệu buổi 1-4 + Sóng ngắn', amount: 1600000, date: '2026-09-05', status: 'Đã thanh toán', method: 'Chuyển khoản ngân hàng', paidDate: '2026-09-05' },
-                    { id: 'HD002', patientId: 'BN001', patientName: 'Đỗ Thị Bích Ngọc', description: 'Vật lý trị liệu buổi 5', amount: 400000, date: '2026-09-10', status: 'Chưa thanh toán', method: '', paidDate: '' },
-                    { id: 'HD003', patientId: 'BN002', patientName: 'Nguyễn Văn Hùng', description: 'Phục hồi chức năng thoát vị L4-L5 (9 buổi)', amount: 3600000, date: '2026-09-08', status: 'Đã thanh toán', method: 'Ví Momo', paidDate: '2026-09-09' },
-                    { id: 'HD004', patientId: 'BN003', patientName: 'Trần Thị Mai', description: 'Điện trị liệu khớp gối trọn gói 8 buổi', amount: 3200000, date: '2026-08-20', status: 'Đã thanh toán', method: 'Tiền mặt tại quầy', paidDate: '2026-08-20' },
-                    { id: 'HD005', patientId: 'BN004', patientName: 'Lê Hoàng Long', description: 'Khám & đánh giá cột sống ngực ban đầu', amount: 350000, date: '2026-09-06', status: 'Chưa thanh toán', method: '', paidDate: '' }
+                    { id: 'HD001', patientId: 'BN001', patientName: 'Đỗ Thị Bích Ngọc', description: 'Vật lý trị liệu buổi 1-4 + Sóng ngắn', amount: 1600000, date: '2026-09-05', status: 'Đã thanh toán', method: 'Chuyển khoản ngân hàng', paidDate: '2026-09-05', debtType: 'Đã thanh toán đủ', debtRemaining: 0, confirmedByPatient: true, confirmedByClinic: true },
+                    { id: 'HD002', patientId: 'BN001', patientName: 'Đỗ Thị Bích Ngọc', description: 'Vật lý trị liệu buổi 5', amount: 400000, date: '2026-09-10', status: 'Chưa thanh toán', method: '', paidDate: '', debtType: 'Toàn bộ', debtRemaining: 400000, confirmedByPatient: false, confirmedByClinic: false },
+                    { id: 'HD003', patientId: 'BN002', patientName: 'Nguyễn Văn Hùng', description: 'Phục hồi chức năng thoát vị L4-L5 (9 buổi)', amount: 3600000, date: '2026-09-08', status: 'Đã thanh toán', method: 'Ví Momo', paidDate: '2026-09-09', debtType: 'Đã thanh toán đủ', debtRemaining: 0, confirmedByPatient: true, confirmedByClinic: true },
+                    { id: 'HD004', patientId: 'BN003', patientName: 'Trần Thị Mai', description: 'Điện trị liệu khớp gối trọn gói 8 buổi', amount: 3200000, date: '2026-08-20', status: 'Đã thanh toán', method: 'Tiền mặt tại quầy', paidDate: '2026-08-20', debtType: 'Đã thanh toán đủ', debtRemaining: 0, confirmedByPatient: true, confirmedByClinic: true },
+                    { id: 'HD005', patientId: 'BN004', patientName: 'Lê Hoàng Long', description: 'Khám & đánh giá cột sống ngực ban đầu', amount: 350000, date: '2026-09-06', status: 'Chưa thanh toán', method: '', paidDate: '', debtType: 'Toàn bộ', debtRemaining: 350000, confirmedByPatient: false, confirmedByClinic: false }
                 ],
                 staff: [
                     { id: 'admin', username: 'admin', password: 'admin123', name: 'BS. Hoàng Minh', role: 'admin', title: 'Quản trị viên hệ thống', protected: true },
@@ -1127,15 +1498,22 @@
                     { id: uid('NV'), username: 'cskh', password: 'cskh123', name: 'Phạm Văn Đức', role: 'care', title: 'Chăm sóc khách hàng', protected: false },
                     { id: uid('NV'), username: 'sale', password: 'sale123', name: 'Trần Thị Hoa', role: 'sales', title: 'Nhân viên Sale', protected: false }
                 ],
+                technicians: [
+                    { id: uid('KTV'), username: 'ktv1', password: 'ktv123', name: 'Lê Văn Sơn', techType: 'Vận động', isLead: true, status: 'Nghỉ (Off)', lastCheckIn: null, lastCheckOut: null },
+                    { id: uid('KTV'), username: 'ktv2', password: 'ktv123', name: 'Trần Văn Bình', techType: 'Máy', isLead: false, status: 'Nghỉ (Off)', lastCheckIn: null, lastCheckOut: null },
+                    { id: uid('KTV'), username: 'ktv3', password: 'ktv123', name: 'Nguyễn Thị Hạnh', techType: 'Tay', isLead: false, status: 'Nghỉ (Off)', lastCheckIn: null, lastCheckOut: null }
+                ],
+                tours: [],
                 currentBodyFilter: null
             };
         }
 
         const ROLE_CONFIG = {
-            admin: { subtitle: 'Hệ Thống Quản Lý', navTabs: ['dashboard','appointments','patients','bodymap','treatments','billing','staff'], landing: 'dashboard', avatarBg: 'bg-blue-600', ring: 'ring-blue-500/50', roleLabel: 'Bác sĩ / Quản trị viên', accent: 'bg-blue-600' },
+            admin: { subtitle: 'Hệ Thống Quản Lý', navTabs: ['dashboard','appointments','patients','bodymap','treatments','billing','technicians','staff'], landing: 'dashboard', avatarBg: 'bg-blue-600', ring: 'ring-blue-500/50', roleLabel: 'Bác sĩ / Quản trị viên', accent: 'bg-blue-600' },
             accountant: { subtitle: 'Kế Toán', navTabs: ['billing'], landing: 'billing', avatarBg: 'bg-emerald-600', ring: 'ring-emerald-500/50', roleLabel: 'Kế toán', accent: 'bg-emerald-600' },
             care: { subtitle: 'Chăm Sóc Khách Hàng', navTabs: ['appointments'], landing: 'appointments', avatarBg: 'bg-purple-600', ring: 'ring-purple-500/50', roleLabel: 'Chăm sóc khách hàng', accent: 'bg-purple-600' },
-            sales: { subtitle: 'Nhân Viên Sale', navTabs: ['patients'], landing: 'patients', avatarBg: 'bg-orange-600', ring: 'ring-orange-500/50', roleLabel: 'Nhân viên Sale / Kinh doanh', accent: 'bg-orange-600' }
+            sales: { subtitle: 'Nhân Viên Sale', navTabs: ['patients'], landing: 'patients', avatarBg: 'bg-orange-600', ring: 'ring-orange-500/50', roleLabel: 'Nhân viên Sale / Kinh doanh', accent: 'bg-orange-600' },
+            technician: { subtitle: 'Kỹ Thuật Viên', navTabs: ['technicians'], landing: 'technicians', avatarBg: 'bg-teal-600', ring: 'ring-teal-500/50', roleLabel: 'Kỹ thuật viên', accent: 'bg-teal-600' }
         };
 
         const NAV_META = {
@@ -1145,6 +1523,7 @@
             bodymap: { icon: 'fa-solid fa-child-reaching', label: 'Sơ Đồ Đau / Cột Sống' },
             treatments: { icon: 'fa-solid fa-notes-medical', label: 'Liệu Trình & Tái Khám' },
             billing: { icon: 'fa-solid fa-file-invoice-dollar', label: 'Thanh Toán & Hóa Đơn' },
+            technicians: { icon: 'fa-solid fa-people-arrows', label: 'Kỹ Thuật Viên' },
             staff: { icon: 'fa-solid fa-id-badge', label: 'Quản Lý Nhân Sự' }
         };
 
@@ -1162,8 +1541,27 @@
                     if (!appData.staff || appData.staff.length === 0) appData.staff = seedData().staff;
                     appData.patients.forEach(p => {
                         if (!p.healthMetrics) p.healthMetrics = [];
-                        p.healthMetrics.forEach(m => { if (!m.id) m.id = uid('HM'); });
+                        p.healthMetrics.forEach(m => {
+                            if (!m.id) m.id = uid('HM');
+                            const extras = defaultMetricExtras();
+                            Object.keys(extras).forEach(k => { if (m[k] === undefined) m[k] = extras[k]; });
+                        });
                         if (!p.dietPlan) p.dietPlan = standardDietPlan;
+                        const intake = defaultIntake();
+                        Object.keys(intake).forEach(k => { if (p[k] === undefined) p[k] = intake[k]; });
+                    });
+                    if (!appData.technicians || appData.technicians.length === 0) appData.technicians = seedData().technicians;
+                    if (!appData.tours) appData.tours = [];
+                    appData.treatments.forEach(t => {
+                        if (t.warrantyStartDate === undefined) t.warrantyStartDate = '';
+                        if (t.warrantySessionsDone === undefined) t.warrantySessionsDone = 0;
+                        if (!t.sessions) t.sessions = [];
+                    });
+                    appData.invoices.forEach(i => {
+                        if (i.debtType === undefined) i.debtType = i.status === 'Đã thanh toán' ? 'Đã thanh toán đủ' : 'Toàn bộ';
+                        if (i.debtRemaining === undefined) i.debtRemaining = i.status === 'Đã thanh toán' ? 0 : i.amount;
+                        if (i.confirmedByPatient === undefined) i.confirmedByPatient = false;
+                        if (i.confirmedByClinic === undefined) i.confirmedByClinic = false;
                     });
                 } catch (e) {
                     console.error('Không đọc được dữ liệu đã lưu, dùng dữ liệu mẫu.', e);
@@ -1180,7 +1578,9 @@
                 appointments: appData.appointments,
                 treatments: appData.treatments,
                 invoices: appData.invoices,
-                staff: appData.staff
+                staff: appData.staff,
+                technicians: appData.technicians,
+                tours: appData.tours
             };
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
@@ -1191,12 +1591,78 @@
 
         const AUTO_EXPORT_KEY = 'vttech_last_auto_export';
 
-        function downloadDataFile(auto) {
+        function buildExcelWorkbook() {
+            const wb = XLSX.utils.book_new();
+
+            const patientRows = appData.patients.map(p => ({
+                'Mã BN': p.id, 'Họ Tên': p.name, 'Tuổi': p.age, 'Giới tính': p.gender, 'SĐT': p.phone,
+                'Nghề nghiệp': p.occupation || '', 'Ngày đầu khám': p.firstVisitDateTime || '',
+                'Vùng đau': p.bodyPart, 'Chẩn đoán chuyên khoa': p.diagnosis,
+                'Lý do khám': p.chiefComplaint || '', 'Bệnh sử': p.presentIllness || '',
+                'Chẩn đoán sơ bộ': p.preliminaryDiagnosis || '', 'Ghi chú điều trị': p.history || ''
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(patientRows), 'Bệnh Nhân');
+
+            const apptRows = appData.appointments.map(a => ({
+                'Bệnh nhân': a.patientName, 'SĐT': a.phone, 'Thời gian': a.time,
+                'Bác sĩ': a.doctor, 'Dịch vụ': a.service, 'Trạng thái': a.status
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(apptRows), 'Lịch Hẹn');
+
+            const treatRows = appData.treatments.map(t => ({
+                'Mã': t.id, 'Bệnh nhân': t.patientName, 'Phác đồ': t.plan,
+                'Tổng buổi': t.total, 'Đã hoàn thành': t.done,
+                'Tái khám kế tiếp': t.followup, 'Trạng thái': t.status,
+                'Đang bảo hành': t.warrantyStartDate ? 'Có' : 'Không',
+                'Số buổi bảo hành đã làm': t.warrantySessionsDone || 0
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(treatRows), 'Liệu Trình');
+
+            const invRows = appData.invoices.map(i => ({
+                'Mã HĐ': i.id, 'Bệnh nhân': i.patientName, 'Nội dung': i.description,
+                'Số tiền': i.amount, 'Ngày lập': i.date, 'Trạng thái': i.status,
+                'Hình thức TT': i.method || '', 'Loại công nợ': i.debtType || '',
+                'Số tiền còn nợ': i.debtRemaining || 0,
+                'BN xác nhận': i.confirmedByPatient ? 'Đã xác nhận' : 'Chưa',
+                'Phòng khám xác nhận': i.confirmedByClinic ? 'Đã xác nhận' : 'Chưa'
+            }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invRows), 'Hóa Đơn');
+
+            if (appData.technicians && appData.technicians.length) {
+                const techRows = appData.technicians.map(t => ({
+                    'Tên': t.name, 'Loại KTV': t.techType, 'Trưởng nhóm': t.isLead ? 'Có' : 'Không',
+                    'Trạng thái': t.status, 'Check-in gần nhất': (t.lastCheckIn && t.lastCheckIn.time) || '',
+                    'Địa chỉ check-in': (t.lastCheckIn && t.lastCheckIn.address) || ''
+                }));
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(techRows), 'Kỹ Thuật Viên');
+            }
+
+            if (appData.tours && appData.tours.length) {
+                const tourRows = appData.tours.map(t => ({
+                    'Ngày': t.date, 'Kỹ thuật viên': t.technicianName, 'Bệnh nhân': t.patientName,
+                    'Giờ hẹn': t.apptTime || '', 'Dịch vụ': t.service || '', 'Bác sĩ phụ trách': t.doctor || '',
+                    'Trạng thái': t.status, 'Diễn tiến buổi làm': t.progressNote || ''
+                }));
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tourRows), 'Lịch Tour KTV');
+            }
+
+            return wb;
+        }
+
+        function downloadExcelFile(auto) {
+            const wb = buildExcelWorkbook();
+            const filename = `vttech-spine-baocao-${new Date().toISOString().slice(0,10)}${auto ? '-tudong' : ''}.xlsx`;
+            XLSX.writeFile(wb, filename);
+        }
+
+        function downloadJsonBackup(auto) {
             const toSave = {
                 patients: appData.patients,
                 appointments: appData.appointments,
                 treatments: appData.treatments,
                 invoices: appData.invoices,
+                technicians: appData.technicians,
+                tours: appData.tours,
                 exportedAt: new Date().toISOString()
             };
             const blob = new Blob([JSON.stringify(toSave, null, 2)], { type: 'application/json' });
@@ -1211,9 +1677,15 @@
         }
 
         function exportData() {
-            downloadDataFile(false);
+            downloadExcelFile(false);
             document.getElementById('dataMenu').classList.add('hidden');
-            showToast('Đã xuất dữ liệu ra file JSON.');
+            showToast('Đã xuất dữ liệu ra file Excel (.xlsx).');
+        }
+
+        function exportDataJson() {
+            downloadJsonBackup(false);
+            document.getElementById('dataMenu').classList.add('hidden');
+            showToast('Đã xuất bản sao lưu JSON (để nhập lại khi cần).');
         }
 
         function checkAutoExport() {
@@ -1222,9 +1694,9 @@
             const last = parseInt(localStorage.getItem(AUTO_EXPORT_KEY) || '0', 10);
             const now = Date.now();
             if (now - last >= ONE_DAY) {
-                downloadDataFile(true);
+                downloadExcelFile(true);
                 localStorage.setItem(AUTO_EXPORT_KEY, String(now));
-                showToast('Đã tự động sao lưu dữ liệu (file JSON) — chu kỳ 24 giờ/lần.', 'info');
+                showToast('Đã tự động xuất báo cáo Excel — chu kỳ 24 giờ/lần.', 'info');
             }
             if (!window.__autoExportIntervalSet) {
                 window.__autoExportIntervalSet = true;
@@ -1328,6 +1800,7 @@
             const user = document.getElementById('admin-user').value.trim();
             const pass = document.getElementById('admin-pass').value;
             const staff = appData.staff.find(s => s.username === user && s.password === pass);
+            const tech = appData.technicians.find(t => t.username === user && t.password === pass);
             if (staff) {
                 appData.currentUser = { role: staff.role, id: staff.id, name: staff.name, title: staff.title };
                 sessionStorage.setItem(SESSION_KEY, JSON.stringify(appData.currentUser));
@@ -1335,6 +1808,13 @@
                 document.getElementById('mainAppContainer').classList.remove('hidden');
                 startAppWithRole();
                 showToast(`Đăng nhập thành công! Xin chào ${staff.name} (${staff.title})`);
+            } else if (tech) {
+                appData.currentUser = { role: 'technician', id: tech.id, name: tech.name, title: `Kỹ thuật viên ${tech.techType}${tech.isLead ? ' (Trưởng nhóm)' : ''}` };
+                sessionStorage.setItem(SESSION_KEY, JSON.stringify(appData.currentUser));
+                document.getElementById('authModal').classList.add('hidden');
+                document.getElementById('mainAppContainer').classList.remove('hidden');
+                startAppWithRole();
+                showToast(`Đăng nhập thành công! Xin chào ${tech.name}`);
             } else {
                 showToast('Sai tên đăng nhập hoặc mật khẩu!', 'error');
             }
@@ -1453,6 +1933,7 @@
             if (role === 'admin' || role === 'accountant') renderBilling();
             if (role === 'admin' || role === 'care') renderAppointments();
             if (role === 'admin' || role === 'sales') { renderPatients(); }
+            if (role === 'admin' || role === 'technician') renderTechnicians();
             if (role === 'admin') {
                 renderDashboard();
                 renderTreatments();
@@ -1471,7 +1952,7 @@
             toggleSidebar(false);
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('aside nav button').forEach(el => {
-                el.classList.remove('bg-blue-600', 'bg-indigo-600', 'bg-emerald-600', 'bg-purple-600', 'bg-orange-600', 'text-white', 'shadow-md');
+                el.classList.remove('bg-blue-600', 'bg-indigo-600', 'bg-emerald-600', 'bg-purple-600', 'bg-orange-600', 'bg-teal-600', 'text-white', 'shadow-md');
                 el.classList.add('hover:bg-slate-800', 'text-slate-300');
             });
 
@@ -1492,6 +1973,7 @@
                 'bodymap': 'Sơ Đồ Đau & Cột Sống Cơ Xương Khớp',
                 'treatments': 'Quản Lý Liệu Trình & Tái Khám',
                 'billing': 'Thanh Toán & Hóa Đơn',
+                'technicians': 'Kỹ Thuật Viên & Lịch Tour',
                 'staff': 'Quản Lý Nhân Sự & Tài Khoản',
                 'patient-portal': 'Cổng Thông Tin Bệnh Nhân & EMR Cá Nhân'
             };
@@ -1499,6 +1981,7 @@
 
             if (tabId === 'dashboard') setTimeout(renderDashboardCharts, 50);
             if (tabId === 'staff') renderStaff();
+            if (tabId === 'technicians') renderTechnicians();
         }
 
         function openModal(modalId) {
@@ -1742,6 +2225,7 @@
             }
             tbody.innerHTML = appData.treatments.map(t => {
                 const percent = Math.round((t.done / t.total) * 100) || 0;
+                const scheduledCount = (t.sessions || []).filter(s => s.date).length;
                 return `
                     <tr class="hover:bg-slate-50/80 transition">
                         <td class="py-4 px-6">
@@ -1757,6 +2241,7 @@
                             <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden w-36">
                                 <div class="bg-blue-600 h-full rounded-full" style="width: ${percent}%"></div>
                             </div>
+                            <span class="text-[10px] ${scheduledCount >= t.total ? 'text-emerald-600' : 'text-amber-600'} font-medium">${scheduledCount >= t.total ? '✓ Đã xếp lịch đủ' : `Đã xếp lịch ${scheduledCount}/${t.total} buổi`}</span>
                         </td>
                         <td class="py-4 px-6 text-slate-600 font-medium text-xs"><i class="fa-regular fa-calendar mr-1 text-blue-600"></i>${t.followup}</td>
                         <td class="py-4 px-6">
@@ -1765,6 +2250,7 @@
                             </span>
                         </td>
                         <td class="py-4 px-6 text-right whitespace-nowrap">
+                            <button onclick="openScheduleModal('${t.id}')" title="Sắp Xếp Lịch Từng Buổi" class="text-slate-400 hover:text-indigo-600 transition p-2"><i class="fa-regular fa-calendar-plus"></i></button>
                             <button onclick="editTreatment('${t.id}')" class="text-slate-400 hover:text-blue-600 transition p-2"><i class="fa-regular fa-pen-to-square"></i></button>
                             <button onclick="deleteTreatment('${t.id}')" class="text-slate-400 hover:text-red-500 transition p-2"><i class="fa-regular fa-trash-can"></i></button>
                         </td>
@@ -1841,24 +2327,11 @@
             // Pain trend chart
             renderPainChart('portalPainChart', patient);
 
-            // Sessions list
-            const sessionsEl = document.getElementById('portal-treatment-sessions-list');
-            let sessionsHtml = '';
-            for (let i = 1; i <= treatment.total; i++) {
-                const isDone = i <= treatment.done;
-                sessionsHtml += `
-                    <div class="flex items-center justify-between p-3 rounded-xl border ${isDone ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'}">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-7 h-7 rounded-lg ${isDone ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'} flex items-center justify-center font-bold text-xs">
-                                ${isDone ? '<i class="fa-solid fa-check"></i>' : i}
-                            </div>
-                            <span class="text-xs font-semibold ${isDone ? 'text-emerald-900' : 'text-slate-600'}">Buổi số ${i}: ${treatment.plan}</span>
-                        </div>
-                        <span class="text-[11px] font-semibold ${isDone ? 'text-emerald-600' : 'text-slate-400'}">${isDone ? 'Đã hoàn thành' : 'Chưa diễn ra'}</span>
-                    </div>
-                `;
-            }
-            sessionsEl.innerHTML = sessionsHtml;
+            // Bảng chỉ số sức khoẻ & tiến triển — giống hệt dữ liệu bên quản lý (chỉ đọc)
+            renderEmrMetrics(patient, 'portal-metrics-tbody', false);
+
+            // Liệu trình, mốc tái khám, lịch từng buổi & bảo hành — giống hệt dữ liệu bên quản lý (chỉ đọc)
+            renderEmrTreatmentSection(patient, 'portal-treatment-content', false);
 
             // Appointments for this patient
             const apptsEl = document.getElementById('portal-appointments-list');
@@ -2051,6 +2524,69 @@
         }
 
         // ===== PATIENTS CRUD =====
+        function fillIntakeToForm(pat) {
+            document.getElementById('pat-occupation').value = pat.occupation || '';
+            document.getElementById('pat-firstvisit').value = pat.firstVisitDateTime || '';
+            document.getElementById('pat-chiefcomplaint').value = pat.chiefComplaint || '';
+            document.getElementById('pat-presentillness').value = pat.presentIllness || '';
+            const pmh = pat.pastMedicalHistory || {};
+            document.getElementById('pat-hypertension').checked = !!pmh.hypertension;
+            document.getElementById('pat-diabetes').checked = !!pmh.diabetes;
+            document.getElementById('pat-otherdisease').value = pmh.otherDisease || '';
+            document.getElementById('pat-diagnosedat').value = pmh.diagnosedAt || '';
+            document.getElementById('pat-currentmeds').value = pmh.currentMedications || '';
+            document.getElementById('pat-surgical').value = pat.surgicalHistory || '';
+            const alg = pat.allergies || {};
+            document.getElementById('pat-allergy-drug').value = alg.drug || '';
+            document.getElementById('pat-allergy-food').value = alg.food || '';
+            document.getElementById('pat-allergy-other').value = alg.other || '';
+            const hab = pat.habits || {};
+            document.getElementById('pat-exerciselimited').checked = !!hab.exerciseLimited;
+            document.getElementById('pat-exercisefreq').value = hab.exerciseFreq || '';
+            document.getElementById('pat-greasy').checked = !!hab.greasyFood;
+            document.getElementById('pat-vegetarian').checked = !!hab.vegetarian;
+            document.getElementById('pat-highsalt').checked = !!hab.highSalt;
+            document.getElementById('pat-alcohol').value = hab.alcohol || '';
+            document.getElementById('pat-lowwater').checked = !!hab.lowWater;
+            document.getElementById('pat-sedentary').checked = !!hab.sedentaryJob;
+            document.getElementById('pat-familyhistory').value = pat.familyHistory || '';
+            document.getElementById('pat-preliminarydx').value = pat.preliminaryDiagnosis || '';
+        }
+
+        function readIntakeFromForm() {
+            return {
+                occupation: document.getElementById('pat-occupation').value,
+                firstVisitDateTime: document.getElementById('pat-firstvisit').value,
+                chiefComplaint: document.getElementById('pat-chiefcomplaint').value,
+                presentIllness: document.getElementById('pat-presentillness').value,
+                pastMedicalHistory: {
+                    hypertension: document.getElementById('pat-hypertension').checked,
+                    diabetes: document.getElementById('pat-diabetes').checked,
+                    otherDisease: document.getElementById('pat-otherdisease').value,
+                    diagnosedAt: document.getElementById('pat-diagnosedat').value,
+                    currentMedications: document.getElementById('pat-currentmeds').value
+                },
+                surgicalHistory: document.getElementById('pat-surgical').value,
+                allergies: {
+                    drug: document.getElementById('pat-allergy-drug').value,
+                    food: document.getElementById('pat-allergy-food').value,
+                    other: document.getElementById('pat-allergy-other').value
+                },
+                habits: {
+                    exerciseLimited: document.getElementById('pat-exerciselimited').checked,
+                    exerciseFreq: document.getElementById('pat-exercisefreq').value,
+                    greasyFood: document.getElementById('pat-greasy').checked,
+                    vegetarian: document.getElementById('pat-vegetarian').checked,
+                    highSalt: document.getElementById('pat-highsalt').checked,
+                    alcohol: document.getElementById('pat-alcohol').value,
+                    lowWater: document.getElementById('pat-lowwater').checked,
+                    sedentaryJob: document.getElementById('pat-sedentary').checked
+                },
+                familyHistory: document.getElementById('pat-familyhistory').value,
+                preliminaryDiagnosis: document.getElementById('pat-preliminarydx').value
+            };
+        }
+
         function openPatientModal(id) {
             const form = document.getElementById('patientForm');
             form.reset();
@@ -2069,10 +2605,14 @@
                 document.getElementById('pat-diagnosis').value = pat.diagnosis;
                 document.getElementById('pat-password').value = pat.password;
                 document.getElementById('pat-history').value = pat.history;
+                fillIntakeToForm(pat);
             } else {
                 document.getElementById('patientModalTitle').innerText = 'Thêm Hồ Sơ Bệnh Nhân & Tạo Tài Khoản EMR';
                 document.getElementById('patientSubmitBtn').innerText = 'Lưu EMR & Tạo Tài Khoản';
                 document.getElementById('pat-password').value = '123456';
+                const now = new Date();
+                now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                document.getElementById('pat-firstvisit').value = now.toISOString().slice(0,16);
             }
             openModal('patientModal');
         }
@@ -2081,6 +2621,7 @@
         function handlePatientSubmit(e) {
             e.preventDefault();
             const editId = document.getElementById('pat-edit-id').value;
+            const intake = readIntakeFromForm();
 
             if (editId) {
                 const pat = appData.patients.find(p => p.id === editId);
@@ -2094,6 +2635,7 @@
                     pat.diagnosis = document.getElementById('pat-diagnosis').value;
                     pat.password = document.getElementById('pat-password').value;
                     pat.history = document.getElementById('pat-history').value;
+                    Object.assign(pat, intake);
                     // keep related records' patientName in sync
                     if (oldName !== pat.name) {
                         appData.appointments.forEach(a => { if (a.patientName === oldName) a.patientName = pat.name; });
@@ -2115,7 +2657,8 @@
                     password: document.getElementById('pat-password').value,
                     history: document.getElementById('pat-history').value,
                     dietPlan: standardDietPlan,
-                    healthMetrics: []
+                    healthMetrics: [],
+                    ...intake
                 };
                 appData.patients.unshift(newPat);
                 showToast(`Đã tạo hồ sơ EMR & Cấp mã đăng nhập thành công! Mã: ${newId}`);
@@ -2250,6 +2793,340 @@
             showToast('Đã xóa tài khoản nhân viên.', 'info');
         }
 
+        // ===== TECHNICIANS (Kỹ Thuật Viên) =====
+        function todayStr() { return new Date().toISOString().split('T')[0]; }
+
+        function currentTechnician() {
+            if (!appData.currentUser || appData.currentUser.role !== 'technician') return null;
+            return appData.technicians.find(t => t.id === appData.currentUser.id) || null;
+        }
+
+        function renderTechnicians() {
+            const role = appData.currentUser.role;
+            const isAdmin = role === 'admin';
+            const me = currentTechnician();
+            const isLead = isAdmin || (me && me.isLead);
+
+            document.getElementById('tech-admin-section').classList.toggle('hidden', !isAdmin);
+            document.getElementById('tech-self-section').classList.toggle('hidden', !me);
+            document.getElementById('tech-lead-section').classList.toggle('hidden', !isLead);
+
+            if (isAdmin) {
+                const grid = document.getElementById('technicians-grid');
+                grid.innerHTML = appData.technicians.map(t => `
+                    <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-bold px-3 py-1 rounded-full bg-teal-100 text-teal-700">KTV ${t.techType}</span>
+                            ${t.isLead ? '<span class="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">Trưởng nhóm</span>' : ''}
+                        </div>
+                        <h3 class="text-base font-bold text-slate-900 mb-1">${t.name}</h3>
+                        <p class="text-xs font-semibold mb-3 ${t.status === 'Đang làm việc' ? 'text-emerald-600' : 'text-slate-400'}"><i class="fa-solid fa-circle text-[8px] mr-1.5"></i>${t.status}</p>
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
+                            <p class="text-xs font-semibold text-slate-700">Đăng nhập: <span class="font-mono text-blue-600">${t.username}</span></p>
+                            <p class="text-xs font-semibold text-slate-700">Mật khẩu: <span class="font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">${t.password}</span></p>
+                            ${t.lastCheckIn ? `<p class="text-[11px] text-slate-500 pt-1">Check-in gần nhất: ${t.lastCheckIn.time}<br>${t.lastCheckIn.address}</p>` : ''}
+                        </div>
+                        <div class="flex items-center justify-end space-x-3 pt-4 mt-3 border-t border-slate-100">
+                            <button onclick="editTechnician('${t.id}')" class="text-slate-400 hover:text-blue-600 text-xs transition"><i class="fa-regular fa-pen-to-square mr-1"></i>Sửa</button>
+                            <button onclick="deleteTechnician('${t.id}')" class="text-slate-400 hover:text-red-500 text-xs transition"><i class="fa-solid fa-trash mr-1"></i>Xóa</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            if (me) {
+                const badge = document.getElementById('tech-self-status-badge');
+                badge.innerText = me.status;
+                badge.className = `text-xs font-bold px-3 py-1.5 rounded-full ${me.status === 'Đang làm việc' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`;
+                const info = document.getElementById('tech-self-checkin-info');
+                let infoText = '';
+                if (me.lastCheckIn) infoText += `Check-in gần nhất: ${me.lastCheckIn.time} — ${me.lastCheckIn.address}. `;
+                if (me.lastCheckOut) infoText += `Check-out gần nhất: ${me.lastCheckOut.time}.`;
+                info.innerText = infoText || 'Chưa có dữ liệu check-in/out.';
+            }
+
+            if (isLead) {
+                const apptSel = document.getElementById('tour-appointment');
+                const assignedApptIds = new Set(appData.tours.filter(t => t.date === todayStr() && t.appointmentId).map(t => t.appointmentId));
+                const availableAppts = appData.appointments.filter(a => a.status !== 'Hoàn thành' && !assignedApptIds.has(a.id));
+                apptSel.innerHTML = '<option value="">-- Chọn lịch hẹn từ Lịch Hẹn Khám --</option>' +
+                    availableAppts.map(a => `<option value="${a.id}">${a.patientName} — ${a.time} — ${a.service} (${a.doctor})</option>`).join('');
+                document.getElementById('tour-no-appt-warning').classList.toggle('hidden', availableAppts.length > 0);
+
+                const techSel = document.getElementById('tour-technician');
+                techSel.innerHTML = appData.technicians.map(t => `<option value="${t.id}">${t.name} (KTV ${t.techType})</option>`).join('');
+            }
+
+            const list = document.getElementById('tour-list');
+            let tours = appData.tours.filter(t => t.date === todayStr());
+            if (!isAdmin && !isLead && me) tours = tours.filter(t => t.technicianId === me.id);
+            if (tours.length === 0) {
+                list.innerHTML = `<p class="text-xs text-slate-400 italic text-center py-6">Chưa có khách nào được xếp lịch hôm nay. Tour chỉ được tạo từ lịch hẹn đã đặt trong mục "Lịch Hẹn Khám".</p>`;
+                return;
+            }
+            list.innerHTML = tours.map(t => `
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="font-bold text-slate-900 text-sm">${t.patientName}</span>
+                            <span class="text-xs text-slate-500 ml-2"><i class="fa-solid fa-user-nurse mr-1"></i>${t.technicianName}</span>
+                        </div>
+                        <span class="text-[10px] px-2.5 py-1 rounded-full font-semibold ${t.status === 'Đã xong' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${t.status}</span>
+                    </div>
+                    ${t.service ? `<p class="text-[11px] text-slate-500 mt-1"><i class="fa-regular fa-clock mr-1"></i>${t.apptTime || ''} • ${t.service}${t.doctor ? ' • ' + t.doctor : ''}</p>` : ''}
+                    ${t.progressNote ? `<p class="text-xs text-slate-600 italic mt-2">"${t.progressNote}"</p>` : ''}
+                    <div class="flex justify-end space-x-3 mt-2">
+                        ${t.status !== 'Đã xong' && (isAdmin || isLead || (me && me.id === t.technicianId)) ? `<button onclick="openTourProgressModal('${t.id}')" class="text-xs font-bold text-teal-600 hover:underline">Đánh dấu đã xong & Ghi diễn tiến</button>` : ''}
+                        ${isAdmin || isLead ? `<button onclick="deleteTourItem('${t.id}')" class="text-xs font-bold text-red-500 hover:underline">Xóa</button>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openTechnicianModal(id) {
+            const form = document.getElementById('technicianForm');
+            form.reset();
+            document.getElementById('tech-edit-id').value = '';
+            if (id) {
+                const t = appData.technicians.find(t => t.id === id);
+                if (!t) return;
+                document.getElementById('technicianModalTitle').innerText = `Chỉnh Sửa: ${t.name}`;
+                document.getElementById('technicianSubmitBtn').innerText = 'Lưu Thay Đổi';
+                document.getElementById('tech-edit-id').value = id;
+                document.getElementById('tech-name').value = t.name;
+                document.getElementById('tech-type').value = t.techType;
+                document.getElementById('tech-islead').checked = !!t.isLead;
+                document.getElementById('tech-username').value = t.username;
+                document.getElementById('tech-password').value = t.password;
+            } else {
+                document.getElementById('technicianModalTitle').innerText = 'Thêm Kỹ Thuật Viên';
+                document.getElementById('technicianSubmitBtn').innerText = 'Lưu Tài Khoản';
+                document.getElementById('tech-password').value = '123456';
+            }
+            openModal('technicianModal');
+        }
+        function editTechnician(id) { openTechnicianModal(id); }
+
+        function handleTechnicianSubmit(e) {
+            e.preventDefault();
+            const editId = document.getElementById('tech-edit-id').value;
+            const username = document.getElementById('tech-username').value.trim();
+            const dup = appData.technicians.find(t => t.username === username && t.id !== editId);
+            if (dup) { showToast('Tên đăng nhập này đã tồn tại.', 'error'); return; }
+
+            if (editId) {
+                const t = appData.technicians.find(t => t.id === editId);
+                if (t) {
+                    t.name = document.getElementById('tech-name').value;
+                    t.techType = document.getElementById('tech-type').value;
+                    t.isLead = document.getElementById('tech-islead').checked;
+                    t.username = username;
+                    t.password = document.getElementById('tech-password').value;
+                    showToast('Đã cập nhật kỹ thuật viên!');
+                }
+            } else {
+                appData.technicians.push({
+                    id: uid('KTV'), name: document.getElementById('tech-name').value,
+                    techType: document.getElementById('tech-type').value,
+                    isLead: document.getElementById('tech-islead').checked,
+                    username, password: document.getElementById('tech-password').value,
+                    status: 'Nghỉ (Off)', lastCheckIn: null, lastCheckOut: null
+                });
+                showToast('Đã thêm kỹ thuật viên mới!');
+            }
+            saveData();
+            renderTechnicians();
+            closeModal('technicianModal');
+        }
+
+        function deleteTechnician(id) {
+            if (!confirm('Xóa tài khoản kỹ thuật viên này?')) return;
+            appData.technicians = appData.technicians.filter(t => t.id !== id);
+            saveData();
+            renderTechnicians();
+            showToast('Đã xóa kỹ thuật viên.', 'info');
+        }
+
+        function toggleTechStatus() {
+            const me = currentTechnician();
+            if (!me) return;
+            me.status = me.status === 'Đang làm việc' ? 'Nghỉ (Off)' : 'Đang làm việc';
+            saveData();
+            renderTechnicians();
+            showToast(`Đã chuyển trạng thái: ${me.status}`, 'info');
+        }
+
+        function techCheckIn() {
+            const me = currentTechnician();
+            if (!me) return;
+            const address = document.getElementById('tech-checkin-address').value.trim();
+            if (!address) { showToast('Vui lòng nhập địa chỉ check-in.', 'error'); return; }
+            me.lastCheckIn = { time: new Date().toLocaleString('vi-VN'), address };
+            me.status = 'Đang làm việc';
+            saveData();
+            renderTechnicians();
+            showToast('Check-in thành công!');
+        }
+
+        function techCheckOut() {
+            const me = currentTechnician();
+            if (!me) return;
+            me.lastCheckOut = { time: new Date().toLocaleString('vi-VN') };
+            saveData();
+            renderTechnicians();
+            showToast('Check-out thành công!');
+        }
+
+        function handleAssignTour(e) {
+            e.preventDefault();
+            const apptId = document.getElementById('tour-appointment').value;
+            const techId = document.getElementById('tour-technician').value;
+            const appt = appData.appointments.find(a => a.id === apptId);
+            const tech = appData.technicians.find(t => t.id === techId);
+            if (!appt) { showToast('Vui lòng chọn một lịch hẹn hợp lệ từ Lịch Hẹn Khám.', 'error'); return; }
+            if (!tech) return;
+            appData.tours.push({
+                id: uid('TOUR'), date: todayStr(), technicianId: tech.id, technicianName: tech.name,
+                appointmentId: appt.id, patientName: appt.patientName, service: appt.service,
+                doctor: appt.doctor, apptTime: appt.time,
+                status: 'Chưa xong', progressNote: ''
+            });
+            saveData();
+            renderTechnicians();
+            showToast('Đã thêm khách vào Tour từ lịch hẹn!');
+        }
+
+        function deleteTourItem(id) {
+            if (!confirm('Xóa mục này khỏi Tour hôm nay?')) return;
+            appData.tours = appData.tours.filter(t => t.id !== id);
+            saveData();
+            renderTechnicians();
+            showToast('Đã xóa khỏi Tour.', 'info');
+        }
+
+        // Form chỉ số diễn tiến riêng theo từng loại Kỹ Thuật Viên
+        function renderProgressFieldsForType(techType, existing) {
+            existing = existing || {};
+            const container = document.getElementById('tour-progress-fields');
+            document.getElementById('tour-progress-techtype').value = techType || '';
+            const labelEl = document.getElementById('tour-progress-techtype-label');
+
+            if (techType === 'Máy') {
+                labelEl.innerText = 'Form chỉ số — Kỹ thuật viên Vật Lý Trị Liệu Máy';
+                container.innerHTML = `
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Tình trạng cơ (trước/sau điều trị)</label>
+                        <input type="text" id="pf-muscle-condition" required value="${existing.muscleCondition || ''}" placeholder="VD: Co cứng cơ cạnh sống giảm sau điều trị" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Thông số máy đã sử dụng (cường độ / thời gian)</label>
+                        <input type="text" id="pf-device-params" value="${existing.deviceParams || ''}" placeholder="VD: Sóng ngắn 20 phút, cường độ mức 3" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Phản ứng của bệnh nhân sau điều trị</label>
+                        <input type="text" id="pf-patient-reaction" value="${existing.patientReaction || ''}" placeholder="VD: Dễ chịu, không đỏ da, không đau tăng" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    </div>
+                `;
+            } else if (techType === 'Tay') {
+                labelEl.innerText = 'Form chỉ số — Kỹ thuật viên Vật Lý Trị Liệu Tay';
+                container.innerHTML = `
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Mức độ co cơ</label>
+                        <input type="text" id="pf-spasm-level" required value="${existing.spasmLevel || ''}" placeholder="VD: Co cứng nhẹ vùng cổ vai, giảm 1 bậc so với buổi trước" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Mức độ đau (VAS/NRS 0-10)</label>
+                        <input type="number" min="0" max="10" id="pf-pain-level" required value="${existing.painLevel !== undefined ? existing.painLevel : ''}" placeholder="VD: 3" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Vận động (biên độ, đáp ứng sau nắn/kéo giãn)</label>
+                        <input type="text" id="pf-mobility" required value="${existing.mobility || ''}" placeholder="VD: Tăng biên độ xoay cổ thêm 15 độ" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    </div>
+                `;
+            } else if (techType === 'Vận động') {
+                labelEl.innerText = 'Form chỉ số — Kỹ thuật viên Vận Động';
+                container.innerHTML = `
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Bài tập đã thực hiện</label>
+                        <input type="text" id="pf-exercises-done" required value="${existing.exercisesDone || ''}" placeholder="VD: Bài tập kéo giãn cơ cổ, bài tập tăng cường cơ lưng" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Bài tập đáp ứng bao nhiêu % (so với mục tiêu buổi tập)</label>
+                        <input type="number" min="0" max="100" id="pf-response-percent" required value="${existing.responsePercent !== undefined ? existing.responsePercent : ''}" placeholder="VD: 80" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    </div>
+                `;
+            } else {
+                labelEl.innerText = '';
+                container.innerHTML = `<p class="text-xs text-slate-400 italic">Không xác định được loại kỹ thuật viên — chỉ có thể ghi ghi chú thêm bên dưới.</p>`;
+            }
+        }
+
+        function buildProgressNoteSummary(techType, fields, generalNote) {
+            const parts = [];
+            if (techType === 'Máy') {
+                if (fields.muscleCondition) parts.push(`Tình trạng cơ: ${fields.muscleCondition}`);
+                if (fields.deviceParams) parts.push(`Thông số máy: ${fields.deviceParams}`);
+                if (fields.patientReaction) parts.push(`Phản ứng sau điều trị: ${fields.patientReaction}`);
+            } else if (techType === 'Tay') {
+                if (fields.spasmLevel) parts.push(`Mức độ co cơ: ${fields.spasmLevel}`);
+                if (fields.painLevel !== '' && fields.painLevel !== undefined) parts.push(`Mức đau: ${fields.painLevel}/10`);
+                if (fields.mobility) parts.push(`Vận động: ${fields.mobility}`);
+            } else if (techType === 'Vận động') {
+                if (fields.exercisesDone) parts.push(`Bài tập: ${fields.exercisesDone}`);
+                if (fields.responsePercent !== '' && fields.responsePercent !== undefined) parts.push(`Đáp ứng bài tập: ${fields.responsePercent}%`);
+            }
+            if (generalNote) parts.push(generalNote);
+            return parts.join(' • ');
+        }
+
+        function openTourProgressModal(tourId) {
+            const tour = appData.tours.find(t => t.id === tourId);
+            if (!tour) return;
+            const tech = appData.technicians.find(t => t.id === tour.technicianId);
+            const techType = tech ? tech.techType : '';
+            document.getElementById('tour-progress-id').value = tourId;
+            document.getElementById('tour-progress-general').value = '';
+            renderProgressFieldsForType(techType, tour.progressFields || {});
+            openModal('tourProgressModal');
+        }
+
+        function handleTourProgressSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('tour-progress-id').value;
+            const techType = document.getElementById('tour-progress-techtype').value;
+            const tour = appData.tours.find(t => t.id === id);
+            if (!tour) { closeModal('tourProgressModal'); return; }
+
+            let fields = {};
+            if (techType === 'Máy') {
+                fields = {
+                    muscleCondition: document.getElementById('pf-muscle-condition').value,
+                    deviceParams: document.getElementById('pf-device-params').value,
+                    patientReaction: document.getElementById('pf-patient-reaction').value
+                };
+            } else if (techType === 'Tay') {
+                fields = {
+                    spasmLevel: document.getElementById('pf-spasm-level').value,
+                    painLevel: document.getElementById('pf-pain-level').value,
+                    mobility: document.getElementById('pf-mobility').value
+                };
+            } else if (techType === 'Vận động') {
+                fields = {
+                    exercisesDone: document.getElementById('pf-exercises-done').value,
+                    responsePercent: document.getElementById('pf-response-percent').value
+                };
+            }
+            const generalNote = document.getElementById('tour-progress-general').value;
+
+            tour.progressFields = fields;
+            tour.progressNote = buildProgressNoteSummary(techType, fields, generalNote);
+            tour.status = 'Đã xong';
+            saveData();
+            renderTechnicians();
+            showToast('Đã lưu diễn tiến & đánh dấu hoàn thành!');
+            closeModal('tourProgressModal');
+        }
+
         // ===== TREATMENTS CRUD =====
         function openTreatmentModal(id) {
             const form = document.getElementById('treatmentForm');
@@ -2341,14 +3218,59 @@
 
         // ===== INVOICES CRUD =====
         function populateInvoicePatientSelect(selectedId) {
-            const sel = document.getElementById('inv-patient-id');
-            sel.innerHTML = appData.patients.map(p => `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${p.name} (${p.id})</option>`).join('');
+            const dl = document.getElementById('inv-patient-datalist');
+            if (dl) dl.innerHTML = appData.patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            if (selectedId) {
+                document.getElementById('inv-patient-code').value = selectedId;
+                document.getElementById('inv-patient-id').value = selectedId;
+                lookupPatientForInvoice();
+            }
+        }
+
+        function lookupPatientForInvoice() {
+            const code = document.getElementById('inv-patient-code').value.trim().toUpperCase();
+            const patient = appData.patients.find(p => p.id.toUpperCase() === code);
+            const infoBox = document.getElementById('inv-patient-info');
+            if (!patient) {
+                document.getElementById('inv-patient-id').value = '';
+                infoBox.classList.add('hidden');
+                return;
+            }
+            document.getElementById('inv-patient-id').value = patient.id;
+            document.getElementById('inv-info-name').innerText = `${patient.name} (${patient.id})`;
+
+            const treatment = appData.treatments.find(t => t.patientName === patient.name);
+            if (treatment) {
+                const isWarranty = treatment.done >= treatment.total;
+                document.getElementById('inv-info-package').innerText = isWarranty
+                    ? `${treatment.plan} — Đang bảo hành (${treatment.warrantySessionsDone || 0}/12 tháng)`
+                    : `${treatment.plan} — Đã dùng ${treatment.done}/${treatment.total} buổi`;
+                document.getElementById('inv-info-enddate').innerText = treatment.followup ? treatment.followup : 'Chưa xếp lịch tái khám';
+            } else {
+                document.getElementById('inv-info-package').innerText = 'Chưa có liệu trình nào được khởi tạo';
+                document.getElementById('inv-info-enddate').innerText = '-';
+            }
+            infoBox.classList.remove('hidden');
+        }
+
+        function toggleDebtDetail() {
+            const type = document.getElementById('inv-debttype').value;
+            const detail = document.getElementById('inv-debt-detail');
+            const label = document.getElementById('inv-debt-detail-label');
+            if (type === 'Một phần' || type === 'Góp') {
+                detail.classList.remove('hidden');
+                label.innerText = type === 'Một phần' ? 'Số tiền còn nợ (VNĐ)' : 'Chi tiết trả góp (VD: 3 kỳ, mỗi kỳ 500.000đ)';
+            } else {
+                detail.classList.add('hidden');
+            }
         }
 
         function openInvoiceModal(id, presetPatientId) {
             const form = document.getElementById('invoiceForm');
             form.reset();
             document.getElementById('inv-edit-id').value = '';
+            document.getElementById('inv-patient-info').classList.add('hidden');
+            document.getElementById('inv-debt-detail').classList.add('hidden');
             populateInvoicePatientSelect(presetPatientId || null);
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('inv-date').value = today;
@@ -2358,12 +3280,21 @@
                 if (!inv) return;
                 document.getElementById('invoiceModalTitle').innerText = 'Chỉnh Sửa Hóa Đơn';
                 document.getElementById('inv-edit-id').value = id;
+                document.getElementById('inv-patient-code').value = inv.patientId;
                 document.getElementById('inv-patient-id').value = inv.patientId;
+                lookupPatientForInvoice();
                 document.getElementById('inv-description').value = inv.description;
                 document.getElementById('inv-amount').value = inv.amount;
                 document.getElementById('inv-date').value = inv.date;
+                document.getElementById('inv-method').value = inv.method || '';
+                document.getElementById('inv-debttype').value = inv.debtType || 'Đã thanh toán đủ';
+                document.getElementById('inv-debt-remaining').value = inv.debtRemaining || '';
+                document.getElementById('inv-confirm-patient').checked = !!inv.confirmedByPatient;
+                document.getElementById('inv-confirm-clinic').checked = !!inv.confirmedByClinic;
+                toggleDebtDetail();
             } else {
                 document.getElementById('invoiceModalTitle').innerText = 'Tạo Hóa Đơn Mới';
+                document.getElementById('inv-debttype').value = 'Toàn bộ';
             }
             openModal('invoiceModal');
         }
@@ -2374,28 +3305,40 @@
             const editId = document.getElementById('inv-edit-id').value;
             const patientId = document.getElementById('inv-patient-id').value;
             const patient = appData.patients.find(p => p.id === patientId);
-            if (!patient) { showToast('Vui lòng chọn bệnh nhân hợp lệ.', 'error'); return; }
+            if (!patient) { showToast('Không tìm thấy bệnh nhân với mã này, vui lòng kiểm tra lại.', 'error'); return; }
+
+            const amount = Number(document.getElementById('inv-amount').value);
+            const debtType = document.getElementById('inv-debttype').value;
+            const debtRemainingRaw = document.getElementById('inv-debt-remaining').value;
+            let debtRemaining = 0;
+            if (debtType === 'Toàn bộ') debtRemaining = amount;
+            else if (debtType === 'Một phần') debtRemaining = Number(debtRemainingRaw) || 0;
+            else if (debtType === 'Góp') debtRemaining = debtRemainingRaw;
+
+            const commonFields = {
+                description: document.getElementById('inv-description').value,
+                amount, date: document.getElementById('inv-date').value,
+                method: document.getElementById('inv-method').value,
+                debtType, debtRemaining,
+                confirmedByPatient: document.getElementById('inv-confirm-patient').checked,
+                confirmedByClinic: document.getElementById('inv-confirm-clinic').checked,
+                status: debtType === 'Đã thanh toán đủ' ? 'Đã thanh toán' : 'Chưa thanh toán'
+            };
 
             if (editId) {
                 const inv = appData.invoices.find(i => i.id === editId);
                 if (inv) {
                     inv.patientId = patient.id;
                     inv.patientName = patient.name;
-                    inv.description = document.getElementById('inv-description').value;
-                    inv.amount = Number(document.getElementById('inv-amount').value);
-                    inv.date = document.getElementById('inv-date').value;
+                    Object.assign(inv, commonFields);
+                    if (inv.status === 'Đã thanh toán' && !inv.paidDate) inv.paidDate = todayStr();
                     showToast('Đã cập nhật hóa đơn!');
                 }
             } else {
                 const newInv = {
-                    id: uid('HD'),
-                    patientId: patient.id,
-                    patientName: patient.name,
-                    description: document.getElementById('inv-description').value,
-                    amount: Number(document.getElementById('inv-amount').value),
-                    date: document.getElementById('inv-date').value,
-                    status: 'Chưa thanh toán',
-                    method: '', paidDate: ''
+                    id: uid('HD'), patientId: patient.id, patientName: patient.name,
+                    paidDate: commonFields.status === 'Đã thanh toán' ? todayStr() : '',
+                    ...commonFields
                 };
                 appData.invoices.push(newInv);
                 showToast('Đã tạo hóa đơn mới!');
@@ -2441,6 +3384,9 @@
                     inv.status = 'Đã thanh toán';
                     inv.method = method;
                     inv.paidDate = new Date().toISOString().split('T')[0];
+                    inv.debtType = 'Đã thanh toán đủ';
+                    inv.debtRemaining = 0;
+                    inv.confirmedByClinic = true;
                     saveData();
                     renderBilling();
                     renderDashboard();
@@ -2472,6 +3418,7 @@
             renderEmrMetrics(patient);
             renderPainChart('emrPainChart', patient);
             renderEmrInvoices(patientId);
+            renderEmrTreatmentSection(patient);
             closeAddMetricForm();
 
             const role = appData.currentUser.role;
@@ -2500,10 +3447,191 @@
             `).join('');
         }
 
-        function renderEmrMetrics(patient) {
-            const tbody = document.getElementById('emr-metrics-tbody');
+        // ---- Điều trị & Bảo hành trong EMR ----
+        function getTreatmentCheckpoints(total) {
+            if (total >= 21) return [7, 14, 21];
+            // chia đều 3 mốc cho gói khác 21 buổi
+            return [Math.round(total/3), Math.round(total*2/3), total].filter((v,i,arr) => arr.indexOf(v) === i);
+        }
+
+        function renderEmrTreatmentSection(patient, containerId, allowManage) {
+            containerId = containerId || 'emr-treatment-content';
+            allowManage = allowManage !== false;
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            const treatments = appData.treatments.filter(t => t.patientName === patient.name);
+            if (treatments.length === 0) {
+                el.innerHTML = `<p class="text-xs text-slate-400 italic">Bệnh nhân chưa có liệu trình nào được khởi tạo.</p>`;
+                return;
+            }
+            el.innerHTML = treatments.map(t => {
+                const checkpoints = getTreatmentCheckpoints(t.total);
+                const percent = Math.round((t.done / t.total) * 100) || 0;
+                const isDoneAll = t.done >= t.total;
+                const warrantyDots = Array.from({length: 12}, (_, i) => `
+                    <span class="w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-bold ${i < (t.warrantySessionsDone||0) ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}">${i+1}</span>
+                `).join('');
+                const scheduledCount = (t.sessions || []).filter(s => s.date).length;
+                return `
+                    <div class="bg-white p-4 rounded-xl border border-slate-100 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-900">${t.plan}</span>
+                            <span class="text-[10px] px-2 py-1 rounded-full font-semibold ${t.status === 'Hoàn thành' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}">${t.status}</span>
+                        </div>
+                        <div class="relative pt-1">
+                            <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden relative">
+                                <div class="bg-blue-600 h-full rounded-full" style="width:${percent}%"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+                                <span>0</span>
+                                ${checkpoints.map(c => `<span class="${t.done >= c ? 'text-blue-600 font-bold' : ''}">Mốc ${c}</span>`).join('')}
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-slate-600">Đã hoàn thành <b>${t.done}/${t.total}</b> buổi • Mốc tái khám kiểm tra: <b>buổi ${checkpoints.join(', ')}</b></p>
+                        <p class="text-[11px] font-semibold text-indigo-700 bg-indigo-50 inline-block px-2 py-1 rounded-lg"><i class="fa-regular fa-calendar mr-1"></i>Ngày tái khám kế tiếp: ${t.followup || 'Chưa xếp lịch — cần chia lịch ngay'}</p>
+
+                        <div class="pt-2 mt-1 border-t border-slate-100">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <p class="text-[11px] font-bold text-slate-700">Lịch trình từng buổi (${scheduledCount}/${t.total} đã xếp lịch)</p>
+                                ${allowManage ? `<button onclick="openScheduleModal('${t.id}')" class="no-print text-[11px] font-bold text-blue-600 hover:underline"><i class="fa-regular fa-calendar-plus mr-1"></i>Sắp Xếp Lịch Từng Buổi</button>` : ''}
+                            </div>
+                            ${renderSessionScheduleTable(t)}
+                        </div>
+
+                        ${isDoneAll ? `
+                            <div class="pt-2 mt-2 border-t border-slate-100">
+                                <p class="text-xs font-bold text-emerald-700 mb-2"><i class="fa-solid fa-shield-heart mr-1"></i>Đã hoàn thành liệu trình chính — Lịch bảo hành 12 tháng (1 lần/tháng)</p>
+                                <div class="flex flex-wrap gap-1.5 mb-2">${warrantyDots}</div>
+                                ${allowManage ? `<button onclick="markWarrantySession('${t.id}')" class="no-print text-[11px] font-bold text-emerald-600 hover:underline">+ Đánh dấu đã tái khám bảo hành tháng này</button>` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function ensureSessionsArray(t) {
+            const existing = {};
+            (t.sessions || []).forEach(s => { existing[s.number] = s; });
+            const arr = [];
+            for (let i = 1; i <= t.total; i++) {
+                arr.push(existing[i] || { number: i, date: '', content: '' });
+            }
+            t.sessions = arr;
+            return t.sessions;
+        }
+
+        function renderSessionScheduleTable(t) {
+            ensureSessionsArray(t);
+            const checkpoints = getTreatmentCheckpoints(t.total);
+            const today = todayStr();
+            const rows = t.sessions.map(s => {
+                const isCheckpoint = checkpoints.includes(s.number);
+                const isDone = s.number <= t.done;
+                let statusBadge = '<span class="text-[10px] text-slate-400 flex-shrink-0">Chưa xếp lịch</span>';
+                if (s.date) {
+                    if (isDone) statusBadge = '<span class="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0">Hoàn thành</span>';
+                    else if (s.date === today) statusBadge = '<span class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0">Hôm nay</span>';
+                    else if (s.date < today) statusBadge = '<span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0">Trễ lịch</span>';
+                    else statusBadge = '<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0">Sắp tới</span>';
+                }
+                return `
+                    <div class="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg ${isCheckpoint ? 'bg-amber-50/70' : ''}">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="text-[11px] font-bold ${isCheckpoint ? 'text-amber-700' : 'text-slate-700'} flex-shrink-0">Buổi ${s.number}${isCheckpoint ? ' 🔔' : ''}</span>
+                            <span class="text-[11px] text-slate-500 flex-shrink-0">${s.date || '--/--'}</span>
+                            <span class="text-[11px] text-slate-600 truncate">${s.content || ''}</span>
+                        </div>
+                        ${statusBadge}
+                    </div>
+                `;
+            }).join('');
+            return `<div class="max-h-52 overflow-y-auto space-y-0.5 border border-slate-100 rounded-xl p-2 bg-slate-50/50">${rows}</div>`;
+        }
+
+        function openScheduleModal(treatmentId) {
+            const t = appData.treatments.find(t => t.id === treatmentId);
+            if (!t) return;
+            document.getElementById('schedule-treatment-id').value = treatmentId;
+            document.getElementById('scheduleModalSubtitle').innerText = `${t.patientName} — ${t.plan} (${t.total} buổi)`;
+            const checkpoints = getTreatmentCheckpoints(t.total);
+            document.getElementById('schedule-checkpoints-label').innerText = checkpoints.join(', ');
+            ensureSessionsArray(t);
+            const container = document.getElementById('schedule-rows-container');
+            container.innerHTML = t.sessions.map(s => {
+                const isCheckpoint = checkpoints.includes(s.number);
+                return `
+                <div class="grid grid-cols-12 gap-2 items-center p-2 rounded-lg ${isCheckpoint ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50 border border-slate-100'}">
+                    <span class="col-span-3 sm:col-span-2 text-[11px] font-bold ${isCheckpoint ? 'text-amber-700' : 'text-slate-600'}">Buổi ${s.number}${isCheckpoint ? ' 🔔' : ''}</span>
+                    <input type="date" class="schedule-date-input col-span-4 sm:col-span-3 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" data-session="${s.number}" value="${s.date || ''}">
+                    <input type="text" class="schedule-content-input col-span-5 sm:col-span-7 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" data-session="${s.number}" placeholder="Nội dung buổi ${s.number} (VD: Kéo giãn + Sóng ngắn)" value="${s.content || ''}">
+                </div>`;
+            }).join('');
+            openModal('scheduleModal');
+        }
+
+        function handleScheduleSubmit(e) {
+            e.preventDefault();
+            const treatmentId = document.getElementById('schedule-treatment-id').value;
+            const t = appData.treatments.find(t => t.id === treatmentId);
+            if (!t) return;
+            const dateMap = {}, contentMap = {};
+            document.querySelectorAll('.schedule-date-input').forEach(i => { dateMap[i.dataset.session] = i.value; });
+            document.querySelectorAll('.schedule-content-input').forEach(i => { contentMap[i.dataset.session] = i.value; });
+            t.sessions = t.sessions.map(s => ({ ...s, date: dateMap[s.number] || '', content: contentMap[s.number] || '' }));
+
+            // Tự động cập nhật "Ngày tái khám kế tiếp" theo buổi sắp tới chưa hoàn thành
+            const nextSession = t.sessions.find(s => s.number === t.done + 1);
+            if (nextSession && nextSession.date) t.followup = nextSession.date;
+
+            saveData();
+            // Cập nhật ngay tất cả các nơi đang hiển thị dữ liệu liên quan
+            renderTreatments();
+            renderDashboard();
+            const patient = appData.patients.find(p => p.name === t.patientName);
+            if (patient && typeof currentEmrPatientId !== 'undefined' && currentEmrPatientId === patient.id) {
+                renderEmrTreatmentSection(patient);
+            }
+            showToast('Đã lưu lịch trình điều trị từng buổi!');
+            closeModal('scheduleModal');
+        }
+
+        function markWarrantySession(treatmentId) {
+            const t = appData.treatments.find(t => t.id === treatmentId);
+            if (!t) return;
+            if (!t.warrantyStartDate) t.warrantyStartDate = todayStr();
+            t.warrantySessionsDone = Math.min(12, (t.warrantySessionsDone || 0) + 1);
+            saveData();
+            renderTreatments();
+            renderDashboard();
+            const patient = appData.patients.find(p => p.name === t.patientName);
+            if (patient) renderEmrTreatmentSection(patient);
+            showToast('Đã ghi nhận buổi tái khám bảo hành!');
+        }
+
+        function renderMetricProtocolCheckboxes(selected) {
+            selected = selected || [];
+            const container = document.getElementById('metric-protocol-checkboxes');
+            container.innerHTML = TREATMENT_PROTOCOL_OPTIONS.map(opt => `
+                <label class="flex items-center space-x-1.5 bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-slate-700 cursor-pointer">
+                    <input type="checkbox" value="${opt}" class="metric-protocol-cb w-3.5 h-3.5 accent-blue-600" ${selected.includes(opt) ? 'checked' : ''}>
+                    <span>${opt}</span>
+                </label>
+            `).join('');
+        }
+
+        function getCheckedProtocols() {
+            return Array.from(document.querySelectorAll('.metric-protocol-cb:checked')).map(cb => cb.value);
+        }
+
+        function renderEmrMetrics(patient, tbodyId, showActions) {
+            tbodyId = tbodyId || 'emr-metrics-tbody';
+            showActions = showActions !== false;
+            const tbody = document.getElementById(tbodyId);
+            if (!tbody) return;
+            const colCount = showActions ? 8 : 7;
             if (!patient.healthMetrics || patient.healthMetrics.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-slate-400 italic">Chưa có bản ghi theo dõi chỉ số sức khoẻ nào.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="${colCount}" class="py-6 text-center text-slate-400 italic">Chưa có bản ghi theo dõi chỉ số sức khoẻ nào.</td></tr>`;
                 return;
             }
 
@@ -2512,19 +3640,33 @@
                 if (m.painScore >= 7) painColor = 'text-red-600 bg-red-50';
                 else if (m.painScore >= 4) painColor = 'text-amber-600 bg-amber-50';
 
+                const romParts = [];
+                if (m.romNeck) romParts.push(`Cổ: ${m.romNeck}`);
+                if (m.romShoulder) romParts.push(`Vai: ${m.romShoulder}`);
+                if (m.romBack) romParts.push(`Lưng: ${m.romBack}`);
+                if (m.romKnee) romParts.push(`Gối: ${m.romKnee}`);
+
+                const protocolBadges = (m.treatmentProtocol || []).map(p => `<span class="inline-block bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-medium mr-1 mb-1">${p}</span>`).join('');
+
                 return `
-                    <tr class="hover:bg-slate-50/80 transition">
+                    <tr class="hover:bg-slate-50/80 transition align-top">
                         <td class="py-3 px-4 font-semibold text-slate-900">${m.date}</td>
                         <td class="py-3 px-4">
-                            <span class="px-2.5 py-1 rounded-lg font-bold text-xs ${painColor}">NRS: ${m.painScore}/10</span>
+                            <span class="px-2.5 py-1 rounded-lg font-bold text-xs ${painColor}">${m.painScore}/10</span>
                         </td>
-                        <td class="py-3 px-4 text-slate-700 font-medium">${m.rangeOfMotion}</td>
+                        <td class="py-3 px-4 text-slate-700 font-medium">
+                            ${m.rangeOfMotion}
+                            ${romParts.length ? `<div class="text-[10px] text-slate-400 mt-1">${romParts.join(' • ')}</div>` : ''}
+                        </td>
+                        <td class="py-3 px-4 text-slate-600 text-[11px]">${m.bmi ? 'BMI: ' + m.bmi : ''}${m.bmi && m.lipid ? '<br>' : ''}${m.lipid ? 'Mỡ máu: ' + m.lipid : ''}</td>
                         <td class="py-3 px-4 text-slate-600 font-mono text-[11px]">${m.bloodPressure}</td>
+                        <td class="py-3 px-4">${protocolBadges || '<span class="text-slate-300">-</span>'}</td>
                         <td class="py-3 px-4 text-slate-700 italic">${m.notes}</td>
+                        ${showActions ? `
                         <td class="py-3 px-4 text-right no-print whitespace-nowrap">
                             <button onclick="editMetric('${m.id}')" class="text-slate-400 hover:text-blue-600 transition p-1.5"><i class="fa-regular fa-pen-to-square"></i></button>
                             <button onclick="deleteMetric('${m.id}')" class="text-slate-400 hover:text-red-500 transition p-1.5"><i class="fa-regular fa-trash-can"></i></button>
-                        </td>
+                        </td>` : ''}
                     </tr>
                 `;
             }).join('');
@@ -2534,6 +3676,7 @@
             document.getElementById('metric-edit-id').value = '';
             document.getElementById('metricFormTitle').innerText = 'Cập nhật chỉ số sức khoẻ & tiến triển mới';
             document.getElementById('addMetricFormContainer').querySelector('form').reset();
+            renderMetricProtocolCheckboxes([]);
             document.getElementById('addMetricFormContainer').classList.remove('hidden');
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('metric-date').value = today;
@@ -2556,6 +3699,13 @@
             document.getElementById('metric-rom').value = metric.rangeOfMotion;
             document.getElementById('metric-bp').value = metric.bloodPressure;
             document.getElementById('metric-notes').value = metric.notes;
+            document.getElementById('metric-bmi').value = metric.bmi || '';
+            document.getElementById('metric-lipid').value = metric.lipid || '';
+            document.getElementById('metric-rom-neck').value = metric.romNeck || '';
+            document.getElementById('metric-rom-shoulder').value = metric.romShoulder || '';
+            document.getElementById('metric-rom-back').value = metric.romBack || '';
+            document.getElementById('metric-rom-knee').value = metric.romKnee || '';
+            renderMetricProtocolCheckboxes(metric.treatmentProtocol || []);
             document.getElementById('addMetricFormContainer').classList.remove('hidden');
         }
 
@@ -2582,7 +3732,14 @@
                 painScore: parseInt(document.getElementById('metric-pain').value),
                 rangeOfMotion: document.getElementById('metric-rom').value,
                 bloodPressure: document.getElementById('metric-bp').value,
-                notes: document.getElementById('metric-notes').value
+                notes: document.getElementById('metric-notes').value,
+                bmi: document.getElementById('metric-bmi').value,
+                lipid: document.getElementById('metric-lipid').value,
+                romNeck: document.getElementById('metric-rom-neck').value,
+                romShoulder: document.getElementById('metric-rom-shoulder').value,
+                romBack: document.getElementById('metric-rom-back').value,
+                romKnee: document.getElementById('metric-rom-knee').value,
+                treatmentProtocol: getCheckedProtocols()
             };
 
             if (editId) {
